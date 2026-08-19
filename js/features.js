@@ -186,7 +186,41 @@
 
 (function() {
     var KEY = 'keepaliveAudioEnabled';
-    var SRC = 'https://img.heliar.top/file/1772885159972_silence.m4a';
+var SRC = (function () {
+    var sampleRate = 8000;
+    var seconds = 10;
+    var dataSize = sampleRate * seconds * 2;
+    var buffer = new ArrayBuffer(44 + dataSize);
+    var view = new DataView(buffer);
+
+    function writeText(offset, text) {
+        for (var i = 0; i < text.length; i++) {
+            view.setUint8(offset + i, text.charCodeAt(i));
+        }
+    }
+
+    writeText(0, 'RIFF');
+    view.setUint32(4, 36 + dataSize, true);
+    writeText(8, 'WAVE');
+    writeText(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeText(36, 'data');
+    view.setUint32(40, dataSize, true);
+
+    for (var i = 0; i < sampleRate * seconds; i++) {
+        view.setInt16(44 + i * 2, i % 2 ? 1 : -1, true);
+    }
+
+    return URL.createObjectURL(
+        new Blob([buffer], { type: 'audio/wav' })
+    );
+})();
     var _audio = null;
     var _unlockBound = false;
 
