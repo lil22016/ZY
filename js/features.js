@@ -226,14 +226,38 @@ var SRC = (function () {
 
     function _get() { return localStorage.getItem(KEY) === 'true'; }
 
+    function _setMediaState(state) {
+        if (!('mediaSession' in navigator)) return;
+        try { navigator.mediaSession.playbackState = state; } catch (e) {}
+    }
+
+    function _registerMediaSession() {
+        if (!('mediaSession' in navigator)) return;
+        try {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: 'ʚ𝑳𝑶𝑽𝑬ɞ · 后台保活',
+                artist: 'Loki',
+                album: 'lil22016/ZY'
+            });
+        } catch (e) {}
+
+        try { navigator.mediaSession.setActionHandler('play', function(){ _start(); }); } catch (e) {}
+        try { navigator.mediaSession.setActionHandler('pause', function(){
+            if (_audio) _audio.pause();
+            _setMediaState('paused');
+        }); } catch (e) {}
+        try { navigator.mediaSession.setActionHandler('stop', function(){ _stop(); }); } catch (e) {}
+    }
+
     function _createAudio() {
         if (_audio) return _audio;
         _audio = new Audio(SRC);
         _audio.loop   = true;
         _audio.volume = 0.01;
         _audio.preload = 'auto';
-        _audio.addEventListener('play',  function(){ _setUI(true);  });
-        _audio.addEventListener('pause', function(){ _setUI(false); });
+        _audio.addEventListener('play',  function(){ _setUI(true);  _setMediaState('playing'); });
+        _audio.addEventListener('pause', function(){ _setUI(false); _setMediaState(_get() ? 'paused' : 'none'); });
+        _registerMediaSession();
         return _audio;
     }
 
@@ -275,6 +299,7 @@ var SRC = (function () {
 
     function _stop() {
         if (_audio) { _audio.pause(); _audio.currentTime = 0; }
+        _setMediaState('none');
         _setUI(false);
     }
 
@@ -1852,4 +1877,3 @@ window.tryShowDailyGreeting = function() {
         if (modal) modal.classList.remove('hidden');
     } catch(e) { console.warn('Daily greeting show error:', e); }
 };
-
