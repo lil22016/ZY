@@ -104,17 +104,32 @@
     return { avatar: userConfig.avatar, name: userConfig.name, signature: userConfig.signature };
   }
 
-  // ========== Sample Data (从 localStorage 恢复，或初始化为空) ==========
+  // ========== 朋友圈数据（大容量数据存 IndexedDB/localforage） ==========
+  const MOMENTS_DATA_KEY = 'moments_data';
+  const MOMENTS_COVER_KEY = 'moments_cover';
   const momentsData = [];
-  (function loadMomentsFromStorage() {
+  let momentsStorageLoaded = false;
+
+  async function loadMomentsFromStorage() {
+    if (momentsStorageLoaded) return;
+    momentsStorageLoaded = true;
     try {
-      const saved = localStorage.getItem('moments_data');
-      console.log('[Moments] loadMomentsFromStorage, saved length:', saved ? saved.length : 0);
+      let saved = null;
+      if (typeof localforage !== 'undefined') {
+        saved = await localforage.getItem(MOMENTS_DATA_KEY);
+      }
+      // 兼容旧版本：首次升级时从 localStorage 搬入 IndexedDB。
+      if (!saved) saved = localStorage.getItem(MOMENTS_DATA_KEY);
       if (saved) {
-        const parsed = JSON.parse(saved);
+        const parsed = typeof saved === 'string' ? JSON.parse(saved) : saved;
         if (Array.isArray(parsed)) {
+          momentsData.length = 0;
           parsed.forEach(m => momentsData.push(m));
           console.log('[Moments] 加载了', parsed.length, '条朋友圈');
+          if (typeof localforage !== 'undefined') {
+            await localforage.setItem(MOMENTS_DATA_KEY, parsed);
+            localStorage.removeItem(MOMENTS_DATA_KEY);
+          }
         }
       }
     } catch(e) {
@@ -127,7 +142,7 @@
         window.TaPhoneApp.init();
       }
     }, 100);
-  })();
+  }
 
   // ========== 大文件存储（IndexedDB）- 视频 + 图片 ==========
   // 图片压缩阈值：超过此大小的 base64 存入 IndexedDB
@@ -243,8 +258,7 @@
     });
   }
 
-  // 同步保存朋友圈数据到 localStorage（确保不丢失）
-  // 保留所有原始数据，不做任何修改
+  // 保存朋友圈元数据到 IndexedDB。保留旧函数名，兼容现有调用点。
   function saveMomentsToStorageSync() {
     try {
       const dataToSave = momentsData.map(m => ({
@@ -253,31 +267,21 @@
         comments: m.comments ? [...m.comments] : [],
         likes: m.likes ? [...m.likes] : []
       }));
-      const jsonStr = JSON.stringify(dataToSave);
-      localStorage.setItem('moments_data', jsonStr);
-      console.log('[Moments] 同步保存成功，共', momentsData.length, '条，大小', Math.round(jsonStr.length / 1024), 'KB');
-    } catch(e) {
-      console.warn('[Moments] 同步保存失败:', e);
-      // 存储超限时，尝试将大图片替换为 IDB 引用后保存
-      try {
-        const reduced = momentsData.map(m => {
-          const saved = { ...m, images: [...m.images] };
-          for (let ii = 0; ii < saved.images.length; ii++) {
-            const img = saved.images[ii];
-            if (typeof img === 'string' && img.length > IDB_IMAGE_THRESHOLD && !img.startsWith('__IDB_IMG__')) {
-              saved.images[ii] = '__IDB_IMG__' + m.id + '_' + ii;
-            }
-          }
-          if (saved.video && saved.video.url && saved.video.url.length > 1000 && !saved.video.url.startsWith('__IDB__')) {
-            saved.video = { ...saved.video, url: '__IDB__' + m.id };
-          }
-          return saved;
+      if (typeof localforage !== 'undefined') {
+        localforage.setItem(MOMENTS_DATA_KEY, dataToSave).then(function () {
+          // 只有 IndexedDB 保存成功后才删除旧副本。
+          localStorage.removeItem(MOMENTS_DATA_KEY);
+          console.log('[Moments] IndexedDB 保存成功，共', momentsData.length, '条');
+        }).catch(function (e) {
+          console.error('[Moments] IndexedDB 保存失败:', e);
+          if (typeof showNotification === 'function') showNotification('朋友圈保存失败，请稍后重试', 'error');
         });
-        localStorage.setItem('moments_data', JSON.stringify(reduced));
-        console.warn('[Moments] 已降级保存（大图片替换为IDB引用）');
-      } catch(e2) {
-        console.error('[Moments] 降级保存也失败:', e2);
+      } else {
+        localStorage.setItem(MOMENTS_DATA_KEY, JSON.stringify(dataToSave));
       }
+    } catch(e) {
+      console.error('[Moments] 保存失败:', e);
+      if (typeof showNotification === 'function') showNotification('朋友圈保存失败，请稍后重试', 'error');
     }
   }
 
@@ -308,7 +312,12 @@
 
         dataToSave.push(saved);
       }
-      localStorage.setItem('moments_data', JSON.stringify(dataToSave));
+      if (typeof localforage !== 'undefined') {
+        await localforage.setItem(MOMENTS_DATA_KEY, dataToSave);
+        localStorage.removeItem(MOMENTS_DATA_KEY);
+      } else {
+        localStorage.setItem(MOMENTS_DATA_KEY, JSON.stringify(dataToSave));
+      }
     } catch(e) {
       console.warn('保存朋友圈数据失败（可能超出存储限制）:', e);
       // 存储超限时，尝试只保存文本数据（不含图片）
@@ -317,7 +326,12 @@
           ...m,
           images: m.images.map(img => typeof img === 'string' && img.length > 100 ? '[图片]' : img)
         }));
-        localStorage.setItem('moments_data', JSON.stringify(textOnly));
+        if (typeof localforage !== 'undefined') {
+          await localforage.setItem(MOMENTS_DATA_KEY, textOnly);
+          localStorage.removeItem(MOMENTS_DATA_KEY);
+        } else {
+          localStorage.setItem(MOMENTS_DATA_KEY, JSON.stringify(textOnly));
+        }
         console.warn('已降级保存（仅文本）');
       } catch(e2) {
         console.error('降级保存也失败:', e2);
@@ -405,9 +419,15 @@
     
     // 恢复封面背景
     try {
-      const savedCover = localStorage.getItem('moments_cover');
+      let savedCover = null;
+      if (typeof localforage !== 'undefined') savedCover = await localforage.getItem(MOMENTS_COVER_KEY);
+      if (!savedCover) savedCover = localStorage.getItem(MOMENTS_COVER_KEY);
       if (savedCover) {
         userConfig.coverImage = savedCover;
+        if (typeof localforage !== 'undefined') {
+          await localforage.setItem(MOMENTS_COVER_KEY, savedCover);
+          localStorage.removeItem(MOMENTS_COVER_KEY);
+        }
       }
     } catch(e) {}
     
@@ -3556,8 +3576,13 @@
     }
     if (coverPreview && coverPreview.dataset.base64) {
       userConfig.coverImage = coverPreview.dataset.base64;
-      // 持久化封面背景
-      localStorage.setItem('moments_cover', coverPreview.dataset.base64);
+      // 封面是大图片，保存到 IndexedDB，避免 localStorage 配额溢出。
+      if (typeof localforage !== 'undefined') {
+        await localforage.setItem(MOMENTS_COVER_KEY, coverPreview.dataset.base64);
+        localStorage.removeItem(MOMENTS_COVER_KEY);
+      } else {
+        localStorage.setItem(MOMENTS_COVER_KEY, coverPreview.dataset.base64);
+      }
     }
     
     await initUserInfo();
@@ -3596,6 +3621,7 @@
   // ========== Init ==========
   async function init() {
     try {
+      await loadMomentsFromStorage();
       // 同步头像并初始化
       await initUserInfo();
       await loadMomentsFriends();  // 初始化好友列表（包含伴侣和自定义好友）
