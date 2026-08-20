@@ -10,6 +10,7 @@
     // ==================== 常量与配置 ====================
     var MAP_STORAGE_KEY = 'mapData';
     var MAP_DATA_VERSION = 2; // 数据版本号，变更默认数据时递增
+    var taNextMoveAt = 0; // 持久化下一次移动时间，避免 iOS 挂起后定时器丢失
     var CANVAS_BG = '#f0ebe3';
     var GRID_SIZE = 20;
     var PIXEL_SIZE = 10;
@@ -462,6 +463,7 @@
                     allMapData = saved.allMapData || {};
                     footprints = saved.footprints || [];
                     mapStack = saved.mapStack || ['root'];
+                    taNextMoveAt = Number(saved.taNextMoveAt) || 0;
                     // 确保当前mapKey有数据
                     if (!allMapData[currentMapKey()]) {
                         allMapData[currentMapKey()] = createDefaultMapData(currentMapKey());
@@ -491,9 +493,10 @@
         if (typeof localforage === 'undefined') return;
         localforage.setItem(getMapStorageKey(), {
             version: MAP_DATA_VERSION,
-            allMapData: allMapData,
-            footprints: footprints,
-            mapStack: mapStack
+                allMapData: allMapData,
+                footprints: footprints,
+                mapStack: mapStack,
+                taNextMoveAt: taNextMoveAt
         }).catch(function (e) {
             console.error('[MapApp] 保存地图数据失败:', e);
         });
@@ -632,6 +635,13 @@
             +     '<button class="map-tool-btn" data-tool="addsubmap" title="添加子地图" style="width:40px;height:40px;border:none;border-radius:12px;background:rgba(255,255,255,0.92);color:#9b59b6;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,0.1);backdrop-filter:blur(4px);"><i class="fas fa-layer-group"></i></button>'
             +     '<button class="map-tool-btn" data-tool="drawroute" title="画路线" style="width:40px;height:40px;border:none;border-radius:12px;background:rgba(255,255,255,0.92);color:#e74c3c;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,0.1);backdrop-filter:blur(4px);"><i class="fas fa-route"></i></button>'
             +     '<button class="map-tool-btn" data-tool="terrainedit" title="地形编辑" style="width:40px;height:40px;border:none;border-radius:12px;background:rgba(255,255,255,0.92);color:#2ecc71;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,0.1);backdrop-filter:blur(4px);"><i class="fas fa-paint-brush"></i></button>'
+            +   '</div>'
+
+            // 路线绘制操作（手机端不依赖双击）
+            +   '<div id="map-route-actions" style="display:none;position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:12;gap:7px;padding:7px;background:rgba(255,255,255,0.95);border-radius:14px;box-shadow:0 3px 14px rgba(0,0,0,0.16);">'
+            +     '<button id="map-route-undo" style="padding:8px 11px;border:1px solid var(--border-color);border-radius:9px;background:var(--primary-bg);color:var(--text-primary);font-size:12px;font-family:var(--font-family);">撤销一点</button>'
+            +     '<button id="map-route-save" style="padding:8px 14px;border:none;border-radius:9px;background:var(--accent-color);color:#fff;font-size:12px;font-weight:700;font-family:var(--font-family);">保存路线</button>'
+            +     '<button id="map-route-cancel" style="padding:8px 11px;border:1px solid var(--border-color);border-radius:9px;background:var(--primary-bg);color:var(--text-secondary);font-size:12px;font-family:var(--font-family);">取消</button>'
             +   '</div>'
 
             // 缩放控件（左下）
@@ -1794,6 +1804,9 @@
                         if (panel) panel.style.display = 'none';
                         terrainEditVisible = false;
                     }
+                    if (tool === 'drawroute') currentRoutePoints = [];
+                    updateRouteActions();
+                    updateHoverHint();
                 } else {
                     // 取消之前选中的工具
                     document.querySelectorAll('.map-tool-btn').forEach(function (b) {
@@ -1821,14 +1834,25 @@
                     if (tool === 'drawroute') {
                         currentRoutePoints = [];
                         if (typeof showNotification === 'function') {
-                            showNotification('点击地图添加路线节点，双击完成', 'info');
+                            showNotification('点击地图添加路线节点，然后按“保存路线”', 'info');
                         }
                     }
 
                     updateHoverHint();
+                    updateRouteActions();
                 }
             });
         });
+
+        var routeUndoBtn = document.getElementById('map-route-undo');
+        if (routeUndoBtn) routeUndoBtn.addEventListener('click', function () {
+            if (currentRoutePoints.length) currentRoutePoints.pop();
+            updateRouteActions();
+        });
+        var routeSaveBtn = document.getElementById('map-route-save');
+        if (routeSaveBtn) routeSaveBtn.addEventListener('click', finishCurrentRoute);
+        var routeCancelBtn = document.getElementById('map-route-cancel');
+        if (routeCancelBtn) routeCancelBtn.addEventListener('click', cancelCurrentRoute);
 
         // 地形类型选择
         document.querySelectorAll('.terrain-type-btn').forEach(function (btn) {
@@ -1935,7 +1959,7 @@
             'mypos': '点击地图设置我的位置',
             'addplace': '点击地图添加新地点',
             'addsubmap': '在地图上拖拽创建子地图区域',
-            'drawroute': '点击添加路线节点，双击完成',
+            'drawroute': '点击添加路线节点，然后按“保存路线”',
             'terrainedit': '拖拽绘制地形区域'
         };
 
@@ -1978,6 +2002,7 @@
 
         if (activeTool === 'drawroute') {
             currentRoutePoints.push({ x: pos.x, y: pos.y });
+            updateRouteActions();
             return;
         }
 
@@ -2165,7 +2190,35 @@
         }
     }
 
-    function onCanvasDblClick(e) {
+    function updateRouteActions() {
+        var actions = document.getElementById('map-route-actions');
+        if (!actions) return;
+        actions.style.display = activeTool === 'drawroute' ? 'flex' : 'none';
+        var save = document.getElementById('map-route-save');
+        var undo = document.getElementById('map-route-undo');
+        if (save) {
+            save.disabled = currentRoutePoints.length < 2;
+            save.style.opacity = currentRoutePoints.length < 2 ? '0.45' : '1';
+        }
+        if (undo) {
+            undo.disabled = currentRoutePoints.length < 1;
+            undo.style.opacity = currentRoutePoints.length < 1 ? '0.45' : '1';
+        }
+    }
+
+    function leaveRouteTool() {
+        activeTool = null;
+        currentRoutePoints = [];
+        document.querySelectorAll('.map-tool-btn').forEach(function (b) {
+            b.style.background = 'rgba(255,255,255,0.92)';
+            b.style.transform = 'scale(1)';
+        });
+        if (canvas) canvas.style.cursor = 'grab';
+        updateRouteActions();
+        updateHoverHint();
+    }
+
+    function finishCurrentRoute() {
         if (activeTool === 'drawroute' && currentRoutePoints.length >= 2) {
             var data = currentData();
             if (!data.routes) data.routes = [];
@@ -2175,13 +2228,22 @@
                 points: currentRoutePoints.slice(),
                 color: currentRouteColor
             });
-            currentRoutePoints = [];
             saveMapData();
             renderTabContent();
+            leaveRouteTool();
             if (typeof showNotification === 'function') {
                 showNotification('路线已保存', 'success');
             }
         }
+    }
+
+    function cancelCurrentRoute() {
+        leaveRouteTool();
+        if (typeof showNotification === 'function') showNotification('已取消路线绘制', 'info');
+    }
+
+    function onCanvasDblClick(e) {
+        finishCurrentRoute();
     }
 
     function onCanvasWheel(e) {
@@ -2523,9 +2585,7 @@
         initMoyuSync();
         // Canvas 在 show() 时才获取，所以 Canvas 事件在 show() 中绑定
 
-        // 启动TA位置自动移动（后台运行，不随地图关闭停止）
-        // 每次移动后使用随机间隔重新设置定时器
-        scheduleNextTaMove();
+        // 移动计时器在地图数据加载完成后恢复，避免在空数据上运行。
     }
 
     /**
@@ -2533,10 +2593,20 @@
      */
     function scheduleNextTaMove() {
         if (_taMoveTimer) clearTimeout(_taMoveTimer);
-        var nextInterval = getNextMoveInterval();
+        var now = Date.now();
+        if (!taNextMoveAt) {
+            taNextMoveAt = now + getNextMoveInterval();
+            saveMapData();
+        } else if (taNextMoveAt <= now) {
+            moveTaLocationRandomly();
+            taNextMoveAt = now + getNextMoveInterval();
+            saveMapData();
+        }
+        var nextInterval = Math.max(1000, taNextMoveAt - Date.now());
         _taMoveTimer = setTimeout(function () {
             moveTaLocationRandomly();
-            // 移动完成后，再次安排下一次移动
+            taNextMoveAt = Date.now() + getNextMoveInterval();
+            saveMapData();
             scheduleNextTaMove();
         }, nextInterval);
     }
@@ -2550,6 +2620,8 @@
         loadMapData().then(function () {
             // 确保当前地图有数据（创建默认数据）
             currentData();
+            // iOS 可能暂停或销毁定时器；每次打开地图都按持久化时间补算。
+            scheduleNextTaMove();
 
             // 同步摸鱼位置
             try {
@@ -2646,9 +2718,7 @@
             }
             if (targets.length === 0) { console.log('[MapApp] no targets'); return; }
 
-            // 随机选择一个目标
-            var target = targets[Math.floor(Math.random() * targets.length)];
-            console.log('[MapApp] target:', target.name, 'at', target.mapKey);
+            var target = null;
 
             // 找到当前包含TA位置的地图
             var sourceKey = null;
@@ -2669,6 +2739,14 @@
             }
             if (!taLoc || !sourceData) { console.log('[MapApp] ta not found'); return; }
             console.log('[MapApp] ta currently at', sourceKey, taLoc.x, taLoc.y);
+
+            // 不把当前位置再次选为目标，否则看起来像“完全没移动”。
+            targets = targets.filter(function (t) {
+                return !(t.mapKey === sourceKey && t.x === taLoc.x && t.y === taLoc.y);
+            });
+            if (targets.length === 0) { console.log('[MapApp] no different target'); return; }
+            target = targets[Math.floor(Math.random() * targets.length)];
+            console.log('[MapApp] target:', target.name, 'at', target.mapKey);
 
             // 目标地图数据
             var targetData = allMapData[target.mapKey];
@@ -2806,6 +2884,8 @@
         isPanning = false;
         currentRoutePoints = [];
         searchQuery = '';
+        updateRouteActions();
+        updateHoverHint();
 
         // 隐藏搜索栏
         var searchBar = document.getElementById('map-search-bar');
