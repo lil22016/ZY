@@ -144,10 +144,10 @@
         calendar: '<i class="fas fa-calendar-alt"></i>',
         decide: '<i class="fas fa-balance-scale"></i>',
         stats: '<i class="fas fa-chart-bar"></i>',
-        accounting: '<i class="fas fa-coins"></i>'
+        companion: '<i class="fas fa-hourglass-half"></i>'
     };
 
-    const defaultAppOrder = ['chat', 'mailbox', 'moyu', 'diary', 'fortune', 'mood', 'calendar', 'decide', 'stats', 'accounting', 'map'];
+    const defaultAppOrder = ['chat', 'mailbox', 'moyu', 'diary', 'fortune', 'mood', 'calendar', 'decide', 'stats', 'companion', 'map'];
     let appOrder = [...defaultAppOrder];
     let isEditMode = false;
 
@@ -1170,7 +1170,7 @@
         if (!grid) return;
 
         grid.innerHTML = '';
-        const nameMap = { chat:'聊天', mailbox:'信封', moyu:'摸鱼', diary:'朝夕心记', fortune:'运势', mood:'心晴', calendar:'日历', decide:'抉择', stats:'统计', accounting:'记账' };
+        const nameMap = { chat:'聊天', mailbox:'信封', moyu:'摸鱼', diary:'朝夕心记', fortune:'运势', mood:'心晴', calendar:'日历', decide:'抉择', stats:'统计', companion:'Loki陪伴' };
 
         Object.keys(defaultAppIcons).forEach(app => {
             const item = document.createElement('div');
@@ -1573,12 +1573,11 @@
                 const modal = document.getElementById('stats-modal');
                 if (modal) homeShowModal(modal);
             },
-            'accounting': () => {
-                if (typeof window.openAccountingModal === 'function') {
-                    window.openAccountingModal();
+            'companion': () => {
+                if (window.LokiCompanionApp && typeof window.LokiCompanionApp.show === 'function') {
+                    window.LokiCompanionApp.show();
                 } else {
-                    const modal = document.getElementById('accounting-modal');
-                    if (modal) homeShowModal(modal);
+                    (window.showNotification || function(){})('Loki陪伴加载失败，请刷新重试', 'error');
                 }
             },
             'pet': () => {
@@ -1990,8 +1989,11 @@
         const savedOrder = homeGetItem('home_app_order');
         if (savedOrder) {
             try {
-                appOrder = JSON.parse(savedOrder);
+                appOrder = JSON.parse(savedOrder).map(app => app === 'accounting' ? 'companion' : app);
+                appOrder = appOrder.filter((app, index) => app !== 'accounting' && appOrder.indexOf(app) === index);
+                if (!appOrder.includes('companion')) appOrder.push('companion');
                 reorderAppItems();
+                saveAppOrder();
             } catch(e) {}
         } else {
             // 首次加载：按默认顺序重新分页（每页8个）并保存
