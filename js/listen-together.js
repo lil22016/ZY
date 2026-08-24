@@ -68,8 +68,9 @@
     function inject() {
         addStyles();
         if (document.getElementById('lt-overlay')) return;
+        const embedSrc = `https://www.youtube-nocookie.com/embed/videoseries?list=${encodeURIComponent(PLAYLIST_ID)}&enablejsapi=1&playsinline=1&controls=1&rel=0&origin=${encodeURIComponent(location.origin)}`;
         const overlay = document.createElement('div'); overlay.id = 'lt-overlay';
-        overlay.innerHTML = `<div class="lt-shell"><div class="lt-head"><button class="lt-close" id="lt-close"><i class="fas fa-chevron-left"></i></button><div><div class="lt-kicker">A SHARED FREQUENCY</div><div class="lt-title">Listen Together</div></div><div class="lt-presence"><i class="fas fa-link"></i></div></div><div class="lt-player-card"><div class="lt-video"><div id="lt-youtube-player"></div></div><div class="lt-now"><div class="lt-song" id="lt-song">Your YouTube Music playlist</div><div class="lt-artist" id="lt-artist">Tap play to begin listening together</div><div class="lt-progress"><div class="lt-progress-fill" id="lt-progress-fill"></div></div><div class="lt-time"><span id="lt-current">0:00</span><span id="lt-duration">0:00</span></div><div class="lt-controls"><button class="lt-control" id="lt-shuffle" title="随机播放"><i class="fas fa-random"></i></button><button class="lt-control" id="lt-prev"><i class="fas fa-step-backward"></i></button><button class="lt-control main" id="lt-play"><i class="fas fa-play"></i></button><button class="lt-control" id="lt-next"><i class="fas fa-step-forward"></i></button><button class="lt-control" id="lt-open-youtube" title="在 YouTube Music 打开"><i class="fas fa-external-link-alt"></i></button></div></div></div><div class="lt-loki-card"><div class="lt-loki-line" id="lt-loki-line">“Whenever you are ready, darling.”</div><div class="lt-loki-meta"><span id="lt-loki-status">Loki is waiting.</span><span class="lt-heart" id="lt-heart">♥</span></div></div><div class="lt-events"><div class="lt-events-title">SESSION</div><div id="lt-event-list"><div class="lt-event">The room is quiet. Press play when you are ready.</div></div></div><div class="lt-hint">YouTube controls the audio stream. On iPhone, the first play must be started by your tap, and background playback may still follow iOS restrictions.</div></div>`;
+        overlay.innerHTML = `<div class="lt-shell"><div class="lt-head"><button class="lt-close" id="lt-close"><i class="fas fa-chevron-left"></i></button><div><div class="lt-kicker">A SHARED FREQUENCY</div><div class="lt-title">Listen Together</div></div><div class="lt-presence"><i class="fas fa-link"></i></div></div><div class="lt-player-card"><div class="lt-video"><iframe id="lt-youtube-player" src="${embedSrc}" frameborder="0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div><div class="lt-now"><div class="lt-song" id="lt-song">Your YouTube Music playlist</div><div class="lt-artist" id="lt-artist">Tap play to begin listening together</div><div class="lt-progress"><div class="lt-progress-fill" id="lt-progress-fill"></div></div><div class="lt-time"><span id="lt-current">0:00</span><span id="lt-duration">0:00</span></div><div class="lt-controls"><button class="lt-control" id="lt-shuffle" title="随机播放"><i class="fas fa-random"></i></button><button class="lt-control" id="lt-prev"><i class="fas fa-step-backward"></i></button><button class="lt-control main" id="lt-play"><i class="fas fa-play"></i></button><button class="lt-control" id="lt-next"><i class="fas fa-step-forward"></i></button><button class="lt-control" id="lt-open-youtube" title="在 YouTube Music 打开"><i class="fas fa-external-link-alt"></i></button></div></div></div><div class="lt-loki-card"><div class="lt-loki-line" id="lt-loki-line">“Whenever you are ready, darling.”</div><div class="lt-loki-meta"><span id="lt-loki-status">Loki is waiting.</span><span class="lt-heart" id="lt-heart">♥</span></div></div><div class="lt-events"><div class="lt-events-title">SESSION</div><div id="lt-event-list"><div class="lt-event">The room is quiet. Press play when you are ready.</div></div></div><div class="lt-hint">Privacy-enhanced, sign-in-free embed mode is active. The playlist must be Public or Unlisted. If YouTube still requests sign-in, open the playlist in Safari to verify it is playable without an account.</div></div>`;
         document.body.appendChild(overlay);
         document.getElementById('lt-close').onclick = close;
         document.getElementById('lt-play').onclick = togglePlay;
@@ -96,18 +97,19 @@
         if (player) return;
         await loadYouTubeApi();
         player = new YT.Player('lt-youtube-player', {
-            width: '100%', height: '100%',
-            playerVars: { playsinline: 1, controls: 1, rel: 0, origin: location.origin },
             events: {
                 onReady: event => {
                     playerReady = true;
-                    event.target.cuePlaylist({ listType: 'playlist', list: PLAYLIST_ID, index: 0, startSeconds: 0 });
                     event.target.setLoop(true);
                     if (state.shuffle) event.target.setShuffle(true);
                     updateButtons(); updateTrackInfo();
                 },
                 onStateChange: onPlayerState,
-                onError: () => setLokiLine('The player refused that track. Irritating. Try the next one.', 'Playback error')
+                onError: event => {
+                    const code = event && event.data;
+                    setLokiLine('YouTube refused this embedded track. Check that the playlist is Public or Unlisted, then try again.', `Playback error${code ? ' · ' + code : ''}`);
+                    addEvent(`YouTube playback error${code ? ' (' + code + ')' : ''}.`);
+                }
             }
         });
     }
