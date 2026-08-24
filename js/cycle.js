@@ -105,7 +105,7 @@
         .app-icon[data-app="cycle"]{position:relative;background:linear-gradient(145deg,#4b1834 0%,#8d4367 53%,#d49a75 100%)!important;color:#fff1dd!important;border:1px solid rgba(255,220,202,.32)!important;box-shadow:0 7px 18px rgba(92,31,65,.34),inset 0 1px 0 rgba(255,255,255,.16)!important;overflow:hidden}.app-icon[data-app="cycle"]:after{content:"";position:absolute;width:30px;height:30px;right:-12px;top:-12px;border:1px solid rgba(255,240,221,.28);border-radius:50%;box-shadow:0 0 14px rgba(255,210,190,.2)}.app-icon[data-app="cycle"] i{position:relative;z-index:1;text-shadow:0 0 10px rgba(255,229,204,.55)}
         .cycle-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.cycle-row{display:flex;gap:8px;align-items:flex-end}.cycle-row label{flex:1;font-size:12px;color:var(--text-secondary)}.cycle-row input{width:100%;box-sizing:border-box;margin-top:5px;padding:9px;border:1px solid var(--border-color);border-radius:9px;background:var(--primary-bg);color:var(--text-primary)}
         .cycle-btn{border:0;border-radius:9px;padding:10px 12px;background:var(--accent-color);color:#fff;font-weight:650}.cycle-history{max-height:170px;overflow:auto}.cycle-history-item{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--border-color);font-size:13px;color:var(--text-primary)}
-        .cycle-reminder{position:fixed!important;inset:0!important;z-index:2147483646!important;background:rgba(0,0,0,.48);display:flex!important;align-items:center;justify-content:center;padding:22px;isolation:isolate}.cycle-reminder-card{position:relative;z-index:1;width:min(340px,92vw);background:var(--primary-bg);border-radius:18px;padding:22px;border:1px solid var(--border-color);box-shadow:0 18px 55px rgba(0,0,0,.25)}
+        .cycle-reminder{position:fixed!important;inset:0!important;z-index:2147483646!important;background:rgba(0,0,0,.58);display:flex!important;align-items:center;justify-content:center;padding:22px;isolation:isolate}.cycle-reminder.inside-cycle-modal{position:absolute!important;z-index:2147483646!important}.cycle-reminder-card{position:relative!important;z-index:2147483647!important;width:min(340px,92vw);background:var(--primary-bg);border-radius:18px;padding:22px;border:1px solid var(--border-color);box-shadow:0 18px 55px rgba(0,0,0,.35)}
         .cycle-calendar{background:var(--secondary-bg);border:1px solid var(--border-color);border-radius:16px;padding:12px;margin:8px 0 10px}.cycle-calendar-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}.cycle-calendar-head button{width:32px;height:32px;border:0;border-radius:9px;background:var(--primary-bg);color:var(--text-primary);font-size:18px}.cycle-month-label{font-weight:700;color:var(--text-primary)}
         .cycle-week,.cycle-days{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}.cycle-week span{text-align:center;font-size:10px;color:var(--text-secondary);padding:3px 0}.cycle-day{position:relative;min-height:42px;border:0;border-radius:10px;background:transparent;color:var(--text-primary);padding:5px 2px 12px;font-size:12px}.cycle-day.other{opacity:.28}.cycle-day.today{box-shadow:inset 0 0 0 1.5px var(--accent-color);font-weight:750}.cycle-day.actual{background:rgba(235,87,87,.16)}.cycle-dots{position:absolute;left:3px;right:3px;bottom:5px;display:flex;justify-content:center;gap:2px}.cycle-dot{width:5px;height:5px;border-radius:50%}.cycle-dot.actual{background:#eb5757}.cycle-dot.period{background:#ff8b9b}.cycle-dot.fertile{background:#35b8a0}.cycle-dot.ovulation{background:#8c63d8}.cycle-dot.luteal{background:#e5a93d}
         .cycle-legend{display:flex;flex-wrap:wrap;gap:7px 10px;margin-top:9px;font-size:10px;color:var(--text-secondary)}.cycle-legend span{display:flex;align-items:center;gap:4px}.cycle-summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.cycle-summary{background:var(--secondary-bg);border:1px solid var(--border-color);border-radius:11px;padding:9px}.cycle-summary .cycle-title{font-size:10px;margin-bottom:3px}.cycle-summary .cycle-value{font-size:13px;line-height:1.35}
@@ -185,10 +185,24 @@
     function react(kind) {
         showLokiDialog(kind === 'start' ? '经期开始已记录' : '经期结束已记录', random(lines[kind]));
     }
+    function mountCycleOverlay(overlay) {
+        const modal = document.getElementById('cycle-modal');
+        const modalIsOpen = modal && window.getComputedStyle(modal).display !== 'none';
+        if (modalIsOpen) {
+            overlay.classList.add('inside-cycle-modal');
+            overlay.style.setProperty('position', 'absolute', 'important');
+            overlay.style.setProperty('z-index', '2147483646', 'important');
+            modal.appendChild(overlay);
+        } else {
+            overlay.style.setProperty('position', 'fixed', 'important');
+            overlay.style.setProperty('z-index', '2147483646', 'important');
+            document.body.appendChild(overlay);
+        }
+    }
     function showLokiDialog(title, text) {
         const overlay = document.createElement('div'); overlay.className = 'cycle-reminder';
         overlay.innerHTML = `<div class="cycle-reminder-card"><div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">Loki · ${escapeHtml(title)}</div><div style="font-size:17px;line-height:1.6;color:var(--text-primary);">${escapeHtml(text)}</div><button class="cycle-btn" style="width:100%;margin-top:17px;">知道了</button></div>`;
-        overlay.querySelector('button').onclick = () => overlay.remove(); document.body.appendChild(overlay);
+        overlay.querySelector('button').onclick = () => overlay.remove(); mountCycleOverlay(overlay);
     }
     function showDateActions(value) {
         const overlay = document.createElement('div'); overlay.className = 'cycle-reminder';
@@ -196,7 +210,7 @@
         overlay.querySelector('[data-action="start"]').onclick = () => { overlay.remove(); recordStart(value); };
         overlay.querySelector('[data-action="end"]').onclick = () => { overlay.remove(); recordEnd(value); };
         overlay.querySelector('[data-action="cancel"]').onclick = () => overlay.remove();
-        document.body.appendChild(overlay);
+        mountCycleOverlay(overlay);
     }
     function recordStart(value) {
         if (!parse(value)) return;
@@ -217,7 +231,7 @@
         state.remindersSeen[key] = Date.now(); save();
         const overlay = document.createElement('div'); overlay.className = 'cycle-reminder';
         overlay.innerHTML = `<div class="cycle-reminder-card"><div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">月相周期 · ${fmt(targetDate)}</div><div style="font-size:17px;line-height:1.6;color:var(--text-primary);">${escapeHtml(random(lines[type]))}</div><button class="cycle-btn" style="width:100%;margin-top:17px;">知道了</button></div>`;
-        overlay.querySelector('button').onclick = () => overlay.remove(); document.body.appendChild(overlay); return true;
+        overlay.querySelector('button').onclick = () => overlay.remove(); mountCycleOverlay(overlay); return true;
     }
     function checkReminders() {
         const m = model(); if (!m) return;
