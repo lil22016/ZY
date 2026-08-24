@@ -30,7 +30,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
     <link rel="stylesheet" href="css/styles.css">
-    <link rel="stylesheet" href="css/diary.css">
     <link rel="stylesheet" href="css/home.css">
     <link rel="stylesheet" href="css/pet-style.css">
     <link rel="stylesheet" href="css/moments.css">
@@ -441,10 +440,6 @@
                         </div>
                         <span class="app-name">摸鱼小记</span>
                     </div>
-                    <div class="app-item" onclick="openApp('diary')">
-                        <div class="app-icon" data-app="diary"><i class="fas fa-clipboard-list"></i></div>
-                        <span class="app-name">朝夕心记</span>
-                    </div>
                     <div class="app-item" onclick="openApp('fortune')">
                         <div class="app-icon" data-app="fortune"><i class="fas fa-star-and-crescent"></i></div>
                         <span class="app-name">运势占卜</span>
@@ -482,9 +477,7 @@
                         <span class="app-name">消息统计</span>
                     </div>
                     <div class="app-item" onclick="openApp('companion')">
-                        <div class="app-icon" data-app="companion">
-                        <i class="fas fa-hourglass-half"></i>
-                    </div>
+                        <div class="app-icon" data-app="companion"><i class="fas fa-hourglass-half"></i></div>
                         <span class="app-name">Loki陪伴</span>
                     </div>
                     <div class="app-item" onclick="openApp('pet')">
@@ -3461,11 +3454,8 @@
                     <div class="settings-item" id="envelope-function">
                         <i class="fas fa-envelope"></i><span>信封投递</span>
                     </div>
-                    <div class="settings-item" id="diary-function">
-                        <i class="fas fa-clipboard-list"></i><span>朝夕心记</span>
-                    </div>
-                    <div class="settings-item" id="accounting-function">
-                        <i class="fas fa-coins"></i><span>同心记账</span>
+                    <div class="settings-item" id="tts-function">
+                        <i class="fas fa-volume-up"></i><span>TTS 语音</span>
                     </div>
                 </div>
             </div>
@@ -3794,328 +3784,91 @@
         </div>
     </div>
 
-    <!-- 同心记账 Modal -->
-    <div class="modal" id="accounting-modal">
-        <div class="modal-content accounting-modal-wrapper">
-            <div class="accounting-modal-header">
-                <i class="fas fa-coins"></i><span>同心记账</span>
+    <!-- TTS 语音设置 Modal -->
+    <div class="modal" id="tts-modal">
+        <div class="modal-content" style="max-width:520px;">
+            <div class="modal-title">
+                <i class="fas fa-volume-up"></i><span>TTS 语音</span>
             </div>
 
-            <!-- 月份切换和统计 -->
-            <div class="accounting-header-stats">
-                <button class="accounting-month-btn" id="accounting-prev-month">
-                    <i class="fas fa-chevron-left"></i>
-                </button>
-                <div class="accounting-month-display">
-                    <span id="accounting-current-month">2024年1月</span>
-                </div>
-                <button class="accounting-month-btn" id="accounting-next-month">
-                    <i class="fas fa-chevron-right"></i>
-                </button>
-            </div>
-
-            <div class="accounting-summary-bar">
-                <div class="accounting-summary-item">
-                    <span class="accounting-summary-label">支出</span>
-                    <span class="accounting-summary-value expense" id="accounting-header-expense">¥0.00</span>
-                </div>
-                <div class="accounting-summary-item">
-                    <span class="accounting-summary-label">收入</span>
-                    <span class="accounting-summary-value income" id="accounting-header-income">¥0.00</span>
-                </div>
-                <div class="accounting-summary-item">
-                    <span class="accounting-summary-label">结余</span>
-                    <span class="accounting-summary-value balance" id="accounting-header-balance">¥0.00</span>
-                </div>
-            </div>
-
-            <!-- 标签页切换 -->
-            <div class="accounting-tabs">
-                <button class="accounting-tab-btn active" data-tab="expense">
-                    <i class="fas fa-arrow-down"></i> <span>支出</span>
-                </button>
-                <button class="accounting-tab-btn" data-tab="income">
-                    <i class="fas fa-arrow-up"></i> <span>收入</span>
-                </button>
-                <button class="accounting-tab-btn" data-tab="stats">
-                    <i class="fas fa-chart-pie"></i> <span>统计</span>
-                </button>
-                <button class="accounting-tab-btn" data-tab="labels">
-                    <i class="fas fa-tags"></i> <span>标签</span>
-                </button>
-            </div>
-
-            <!-- 支出面板 -->
-            <div class="accounting-panel" data-panel="expense">
-                <div id="accounting-records-list-expense" class="accounting-scroll-area"></div>
-            </div>
-
-            <!-- 收入面板 -->
-            <div class="accounting-panel" data-panel="income" style="display:none;">
-                <div id="accounting-records-list-income" class="accounting-scroll-area"></div>
-            </div>
-
-            <!-- 统计面板 -->
-            <div class="accounting-panel" data-panel="stats" style="display:none;">
-                <div id="accounting-stats-panel" class="accounting-scroll-area"></div>
-            </div>
-
-            <!-- 标签管理面板 -->
-            <div class="accounting-panel" data-panel="labels" style="display:none;">
-                <div id="accounting-labels-panel" class="accounting-scroll-area"></div>
-            </div>
-
-            <!-- 底部按钮 -->
-            <div class="modal-buttons" style="margin-top:12px;">
-                <button class="modal-btn modal-btn-secondary" id="back-accounting" style="flex:1;">
-                    <i class="fas fa-arrow-left"></i> 返回
-                </button>
-                <button class="modal-btn modal-btn-primary" id="accounting-add-record-btn" style="flex:2;">
-                    <i class="fas fa-plus"></i> 添加记录
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 同心记账 - 添加/编辑记录弹窗 -->
-    <div class="accounting-form-overlay" id="accounting-record-form" style="display:none;">
-        <div class="accounting-form-popup">
-            <div class="accounting-form-popup-header">
-                <span id="accounting-form-title">添加支出</span>
-                <button class="accounting-form-popup-close" id="accounting-form-cancel">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <input type="hidden" id="accounting-form-type" value="expense">
-            <div class="accounting-form-field">
-                <label>金额</label>
-                <input type="number" id="accounting-form-amount" class="accounting-input" placeholder="输入金额..." step="0.01" min="0">
-            </div>
-            <div class="accounting-form-field">
-                <label>分类</label>
-                <select id="accounting-form-label" class="accounting-select"></select>
-            </div>
-            <div class="accounting-form-field">
-                <label>日期</label>
-                <input type="date" id="accounting-form-date" class="accounting-input">
-            </div>
-            <div class="accounting-form-field">
-                <label>备注</label>
-                <input type="text" id="accounting-form-note" class="accounting-input" placeholder="备注（可选）..." maxlength="50">
-            </div>
-            <button class="modal-btn modal-btn-primary accounting-form-popup-save" id="accounting-form-save">
-                <i class="fas fa-check"></i> 保存
-            </button>
-        </div>
-    </div>
-
-    <!-- 朝夕心记 Modal -->
-    <div class="modal" id="diary-modal">
-        <div class="modal-content diary-modal-wrapper">
-            <div class="diary-modal-header">
-                <i class="fas fa-clipboard-list"></i><span>朝夕心记</span>
-            </div>
-
-            <!-- 标签页切换 -->
-            <div class="diary-tabs">
-                <button class="diary-tab-btn active" data-tab="todo">
-                    <i class="fas fa-clipboard-check"></i> <span>待办</span>
-                </button>
-                <button class="diary-tab-btn" data-tab="habit">
-                    <i class="fas fa-fire"></i> <span>打卡</span>
-                </button>
-                <button class="diary-tab-btn" data-tab="period">
-                    <i class="fas fa-calendar-alt"></i> <span>月经记录</span>
-                </button>
-                <button class="diary-tab-btn" data-tab="anniversary">
-                    <i class="fas fa-heart"></i> <span>纪念日</span>
-                </button>
-            </div>
-
-            <!-- 待办事项面板 -->
-            <div class="diary-panel diary-todo-panel" data-panel="todo">
-                <!-- 待办分类二级标签（动态渲染） -->
-                <div class="diary-sub-tabs"></div>
-
-                <!-- 待办列表区域 -->
-                <div id="diary-todo-list" class="diary-todo-scroll-area"></div>
-
-                <!-- 新建待办表单 -->
-                <div id="diary-todo-compose" style="display:none;">
-                    <div class="diary-todo-scroll-area">
-                        <div class="diary-todo-compose-paper">
-                            <div class="diary-todo-compose-heading">
-                                <i class="fas fa-pen" style="font-size:13px;"></i>
-                                <span>新建待办</span>
-                            </div>
-                            <input type="text" id="diary-todo-input" class="diary-input" placeholder="输入待办事项..." maxlength="100" style="margin-bottom:12px;">
-                            <div class="diary-todo-form-row">
-                                <div class="diary-todo-form-field">
-                                    <label>分类</label>
-                                    <select id="diary-todo-category">
-                                        <option value="work">💼 工作</option>
-                                        <option value="life">🏠 生活</option>
-                                        <option value="study">📚 学习</option>
-                                        <option value="health">💪 健康</option>
-                                        <option value="other">📌 其他</option>
-                                    </select>
-                                </div>
-                                <div class="diary-todo-form-field">
-                                    <label>紧急程度</label>
-                                    <select id="diary-todo-priority">
-                                        <option value="high">🔴 紧急</option>
-                                        <option value="medium" selected>🟡 一般</option>
-                                        <option value="low">🟢 轻松</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="diary-todo-form-field" style="margin-top:12px;">
-                                <label>截止时间</label>
-                                <input type="datetime-local" id="diary-todo-due" style="padding:9px 10px;border:1.5px solid var(--border-color);border-radius:10px;background:var(--primary-bg);color:var(--text-primary);font-size:13px;outline:none;font-family:var(--font-family);width:100%;box-sizing:border-box;">
-                            </div>
-                            <div class="diary-todo-reminder-section" style="margin-top:14px;border-top:1px dashed var(--border-color);padding-top:12px;">
-                                <div class="diary-todo-reminder-toggle" id="diary-todo-reminder-toggle">
-                                    <div class="diary-todo-reminder-toggle-left">
-                                        <i class="fas fa-bell" style="color:var(--accent-color);font-size:14px;"></i>
-                                        <span style="font-size:13px;font-weight:500;">设置提醒</span>
-                                    </div>
-                                    <label class="diary-todo-switch">
-                                        <input type="checkbox" id="diary-todo-reminder-enabled">
-                                        <span class="diary-todo-switch-slider"></span>
-                                    </label>
-                                </div>
-                                <div id="diary-todo-reminder-options" style="display:none;margin-top:12px;">
-                                    <div class="diary-todo-form-field">
-                                        <label>提醒时间</label>
-                                        <input type="datetime-local" id="diary-todo-reminder-time" style="padding:9px 10px;border:1.5px solid var(--border-color);border-radius:10px;background:var(--primary-bg);color:var(--text-primary);font-size:13px;outline:none;font-family:var(--font-family);width:100%;box-sizing:border-box;">
-                                    </div>
-                                    <div class="diary-todo-form-field" style="margin-top:10px;">
-                                        <label>重复方式</label>
-                                        <select id="diary-todo-reminder-repeat">
-                                            <option value="none">不重复（仅一次）</option>
-                                            <option value="daily">每天重复</option>
-                                            <option value="weekly">每周重复</option>
-                                            <option value="monthly">每月重复</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="diary-todo-compose-actions">
-                        <button class="modal-btn modal-btn-secondary" id="diary-todo-cancel-btn" style="flex:1;">取消</button>
-                        <button class="modal-btn modal-btn-primary" id="diary-todo-save-btn" style="flex:2;">
-                            <i class="fas fa-check" style="margin-right:6px;"></i>保存待办
-                        </button>
-                    </div>
-                </div>
-
-            </div>
-
-            <!-- 习惯打卡面板 -->
-            <div class="diary-panel diary-habit-panel" data-panel="habit" style="display:none;">
-                <!-- 习惯列表区域 -->
-                <div id="diary-habit-list" class="diary-habit-scroll-area"></div>
-
-                <!-- 新建习惯表单 -->
-                <div id="diary-habit-compose" style="display:none;">
-                    <div class="diary-habit-scroll-area">
-                        <div class="diary-habit-compose-paper">
-                            <div class="diary-habit-compose-heading">
-                                <i class="fas fa-fire" style="font-size:13px;"></i>
-                                <span>新建习惯</span>
-                            </div>
-                            <input type="text" id="diary-habit-name-input" class="diary-input" placeholder="输入习惯名称..." maxlength="20" style="margin-bottom:12px;">
-                            <div class="diary-habit-form-row">
-                                <div class="diary-habit-form-field">
-                                    <label>图标</label>
-                                    <select id="diary-habit-icon-select">
-                                        <option value="fas fa-star">⭐ 星星</option>
-                                        <option value="fas fa-book">📖 阅读</option>
-                                        <option value="fas fa-dumbbell">💪 运动</option>
-                                        <option value="fas fa-glass-water">💧 喝水</option>
-                                        <option value="fas fa-bed">😴 早睡</option>
-                                        <option value="fas fa-apple-whole">🍎 饮食</option>
-                                        <option value="fas fa-music">🎵 音乐</option>
-                                        <option value="fas fa-pen">✏️ 写作</option>
-                                        <option value="fas fa-heart">❤️ 爱心</option>
-                                    </select>
-                                </div>
-                                <div class="diary-habit-form-field">
-                                    <label>颜色</label>
-                                    <select id="diary-habit-color-select">
-                                        <option value="#6bcb77">🟢 绿色</option>
-                                        <option value="#4d96ff">🔵 蓝色</option>
-                                        <option value="#ff6b6b">🔴 红色</option>
-                                        <option value="#ffa502">🟠 橙色</option>
-                                        <option value="#a29bfe">🟣 紫色</option>
-                                        <option value="#fd79a8">🩷 粉色</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="diary-habit-reminder-section" style="margin-top:14px;border-top:1px dashed var(--border-color);padding-top:12px;">
-                                <div class="diary-habit-reminder-toggle" id="diary-habit-reminder-toggle">
-                                    <div class="diary-habit-reminder-toggle-left">
-                                        <i class="fas fa-bell" style="color:var(--accent-color);font-size:14px;"></i>
-                                        <span style="font-size:13px;font-weight:500;">设置提醒</span>
-                                    </div>
-                                    <label class="diary-todo-switch">
-                                        <input type="checkbox" id="diary-habit-reminder-enabled">
-                                        <span class="diary-todo-switch-slider"></span>
-                                    </label>
-                                </div>
-                                <div id="diary-habit-reminder-options" style="display:none;margin-top:12px;">
-                                    <div class="diary-habit-form-field">
-                                        <label>提醒时间</label>
-                                        <input type="time" id="diary-habit-reminder-time" style="padding:9px 10px;border:1.5px solid var(--border-color);border-radius:10px;background:var(--primary-bg);color:var(--text-primary);font-size:13px;outline:none;font-family:var(--font-family);width:100%;box-sizing:border-box;">
-                                    </div>
-                                    <div class="diary-habit-form-field" style="margin-top:10px;">
-                                        <label>重复方式</label>
-                                        <select id="diary-habit-reminder-repeat" style="padding:9px 10px;border:1.5px solid var(--border-color);border-radius:10px;background:var(--primary-bg);color:var(--text-primary);font-size:13px;outline:none;font-family:var(--font-family);width:100%;box-sizing:border-box;">
-                                            <option value="daily">每天重复</option>
-                                            <option value="weekly">每周重复</option>
-                                            <option value="monthly">每月重复</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="diary-habit-compose-actions">
-                        <button class="modal-btn modal-btn-secondary" id="diary-habit-cancel-btn" style="flex:1;">取消</button>
-                        <button class="modal-btn modal-btn-primary" id="diary-habit-save-btn" style="flex:2;">
-                            <i class="fas fa-check" style="margin-right:6px;"></i>保存习惯
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 月经记录面板 -->
-            <div class="diary-panel" data-panel="period" style="display:none;">
-                <div id="diary-period-content"></div>
-            </div>
-
-            <!-- 纪念日面板 -->
-            <div class="diary-panel" data-panel="anniversary" style="display:none;">
-                <div class="diary-add-bar">
-                    <input type="text" id="diary-ann-name-input" class="diary-input" placeholder="纪念日名称..." maxlength="20">
-                    <input type="date" id="diary-ann-date-input" style="padding:9px 10px;border:1.5px solid var(--border-color);border-radius:10px;background:var(--primary-bg);color:var(--text-primary);font-size:13px;outline:none;font-family:var(--font-family);">
-                    <select id="diary-ann-type-select" title="类型">
-                        <option value="anniversary">纪念日</option>
-                        <option value="countdown">倒数日</option>
+            <div class="settings-section">
+                <div class="settings-section-title"><i class="fas fa-plug"></i> API 设置</div>
+                <div class="tts-field">
+                    <label for="tts-provider">TTS 服务商</label>
+                    <select id="tts-provider">
+                        <option value="fish">Fish Audio</option>
+                        <option value="minimax">MiniMax</option>
+                        <option value="custom">自定义代理 / 兼容接口</option>
                     </select>
-                    <button class="diary-add-btn" id="diary-ann-add-btn"><i class="fas fa-plus"></i></button>
                 </div>
-                <div id="diary-anniversary-list"></div>
+                <div class="tts-field">
+                    <label for="tts-api-key">API Key</label>
+                    <div class="tts-secret-row">
+                        <input type="password" id="tts-api-key" autocomplete="off" placeholder="输入 API Key">
+                        <button type="button" id="tts-toggle-key" class="tts-mini-btn" title="显示或隐藏 API Key"><i class="fas fa-eye"></i></button>
+                    </div>
+                </div>
+                <div class="tts-field">
+                    <label for="tts-voice-id">Voice ID</label>
+                    <input type="text" id="tts-voice-id" autocomplete="off" placeholder="输入 Loki 的 Voice ID">
+                </div>
+                <div class="tts-field">
+                    <label for="tts-model">模型</label>
+                    <input type="text" id="tts-model" autocomplete="off" placeholder="Fish: s2.1-pro / MiniMax: speech-2.8-hd">
+                </div>
+                <div class="tts-field" id="tts-endpoint-field" style="display:none;">
+                    <label for="tts-endpoint">代理接口地址</label>
+                    <input type="url" id="tts-endpoint" autocomplete="off" placeholder="https://example.com/api/tts">
+                    <small>自定义接口应返回音频文件，或返回包含 audio_url、url、audio、data 的 JSON。</small>
+                </div>
+                <div class="tts-security-note">
+                    <i class="fas fa-shield-alt"></i>
+                    API Key 只保存在这台设备的浏览器中，不会写入 GitHub 文件。公开网站仍建议长期使用代理接口。
+                </div>
             </div>
 
-            <!-- 底部按钮 -->
-            <div class="modal-buttons" style="position:sticky;bottom:0;background:var(--secondary-bg);border-top:1px solid var(--border-color);padding:12px 0 0;z-index:10;margin-top:8px;margin-left:-24px;margin-right:-24px;padding-left:24px;padding-right:24px;padding-bottom:max(14px, env(safe-area-inset-bottom, 0px));">
-                <button class="modal-btn modal-btn-secondary" id="back-diary">
-                    <i class="fas fa-arrow-left"></i> 返回
-                </button>
-                <button class="modal-btn modal-btn-secondary" id="close-diary" style="display:none;" onclick="handleCreateTodoClick()"><i class="fas fa-plus-circle"></i> 创建新待办</button>
-                <button class="modal-btn modal-btn-secondary" id="create-habit-btn" style="display:none;" onclick="expandDiaryHabitForm()"><i class="fas fa-plus-circle"></i> 创建新习惯</button>
+            <div class="settings-section">
+                <div class="settings-section-title"><i class="fas fa-wave-square"></i> 语音行为</div>
+                <label class="tts-toggle-row">
+                    <span><b>手动转换成语音</b><small>长按文字消息后选择喇叭按钮</small></span>
+                    <input type="checkbox" id="tts-manual-enabled" checked>
+                </label>
+                <label class="tts-toggle-row">
+                    <span><b>允许随机发送语音</b><small>与手动转换可以同时开启</small></span>
+                    <input type="checkbox" id="tts-auto-enabled" checked>
+                </label>
+                <div class="tts-slider-field">
+                    <div><label for="tts-probability">随机语音概率</label><output id="tts-probability-value">5%</output></div>
+                    <input type="range" id="tts-probability" min="0" max="100" step="1" value="5">
+                    <small>默认语音 5%，普通文字 95%；不设置额外发送间隔。</small>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-section-title"><i class="fas fa-sliders-h"></i> 语音参数</div>
+                <div class="tts-slider-field">
+                    <div><label for="tts-speed">语速</label><output id="tts-speed-value">1.0×</output></div>
+                    <input type="range" id="tts-speed" min="0.5" max="2" step="0.05" value="1">
+                </div>
+                <div class="tts-slider-field">
+                    <div><label for="tts-pitch">音调</label><output id="tts-pitch-value">0</output></div>
+                    <input type="range" id="tts-pitch" min="-12" max="12" step="1" value="0">
+                    <small>部分服务商可能忽略音调参数。</small>
+                </div>
+                <div class="tts-slider-field">
+                    <div><label for="tts-volume">播放音量</label><output id="tts-volume-value">80%</output></div>
+                    <input type="range" id="tts-volume" min="0" max="100" step="1" value="80">
+                </div>
+                <div class="tts-field">
+                    <label for="tts-test-text">试听内容</label>
+                    <textarea id="tts-test-text" rows="2">You have my attention. Try not to waste it.</textarea>
+                </div>
+            </div>
+
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-primary" id="tts-save-btn"><i class="fas fa-save"></i> 保存</button>
+                <button class="modal-btn modal-btn-secondary" id="tts-test-btn"><i class="fas fa-play"></i> 试听</button>
+                <button class="modal-btn modal-btn-secondary" id="tts-close-btn">关闭</button>
             </div>
         </div>
     </div>
@@ -4580,10 +4333,11 @@
     <!-- == 核心层 == -->
     <script src="js/config.js"></script>
     <script src="js/utils.js"></script>
-    <script src="js/backup-engine.js"></script>
+    <script src="js/backup-engine.js?v=20260824-tts"></script>
     <script src="js/state.js"></script>
-    <script src="js/core.js"></script>
-    <script src="js/home.js"></script>
+    <script src="js/core.js?v=20260824-tts"></script>
+    <script src="js/home.js?v=20260824-tts"></script>
+    <script src="js/tts.js?v=20260824-1"></script>
 
     <!-- == 功能模块 == -->
     <script src="js/features/mood.js"></script>
@@ -4591,10 +4345,8 @@
     <script src="js/features/red-packet.js"></script>
     <script src="js/features/reply-library.js"></script>
     <script src="js/features/theme-editor.js"></script>
-    <script src="js/features/group-chat.js"></script>
+    <script src="js/features/group-chat.js?v=20260824-no-diary"></script>
     <script src="js/features/call.js"></script>
-    <script src="js/diary.js"></script>
-    <script src="js/accounting.js"></script>
     <script src="js/moyu.js"></script>
     <script src="js/features/map.js"></script>
 
@@ -4603,7 +4355,7 @@
     <script src="js/features.js?v=20260820-media-session"></script>
     <script src="js/data.js"></script>
     <script src="js/onboarding.js"></script>
-    <script src="js/listeners.js"></script>
+    <script src="js/listeners.js?v=20260824-tts"></script>
     <script src="js/app.js"></script>
     <script src="js/pet-game.js"></script>
     <script src="js/ta-phone.js"></script>
@@ -4612,6 +4364,7 @@
     <script src="js/moments.js"></script>
     <script src="js/spark.js"></script>
     <script src="js/features/resonance.js?v=20260821-2"></script>
+    <script src="js/features/companion.js?v=20260822-2"></script>
 
     <!-- 火花弹窗（放在 body 直接子级，避免被父容器 overflow:hidden 裁剪） -->
     <div class="spark-modal-overlay" id="spark-modal-overlay" onclick="SparkApp.closeSparkModal()">
@@ -4636,6 +4389,5 @@
             <button class="spark-modal-close" onclick="SparkApp.closeSparkModal()">知道了</button>
         </div>
     </div>
-        <script src="js/features/companion.js?v=20260823-1"></script>
 </body>
 </html>
