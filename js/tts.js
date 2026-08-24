@@ -2,7 +2,7 @@
  * Loki TTS module
  * - Settings live only in this browser (never committed to GitHub).
  * - Generated audio is cached in IndexedDB through localforage.
- * - Supports Fish Audio, MiniMax and a generic custom proxy.
+ * - Supports ACE Data Cloud (Fish TTS), Fish Audio, MiniMax and a generic custom proxy.
  */
 (function () {
     'use strict';
@@ -45,7 +45,7 @@
 
     function normalizeSettings(raw) {
         return {
-            provider: ['fish', 'minimax', 'custom'].includes(raw.provider) ? raw.provider : 'fish',
+            provider: ['ace', 'fish', 'minimax', 'custom'].includes(raw.provider) ? raw.provider : 'fish',
             apiKey: String(raw.apiKey || '').trim(),
             voiceId: String(raw.voiceId || '').trim(),
             model: String(raw.model || '').trim(),
@@ -131,7 +131,7 @@
             return { blob: hexToBlob(audio, 'audio/mpeg'), url: '' };
         }
 
-        const candidate = data.audio_url || data.url || data.audio || data.data?.audio || data.data;
+        const candidate = data.audio_url || data.url || data.audio || data.data?.audio_url || data.data?.audio || data.data?.[0]?.audio_url || data.data;
         if (!candidate) throw new Error('接口没有返回可识别的音频字段');
         if (typeof candidate === 'string' && /^https?:\/\//i.test(candidate)) return { blob: null, url: candidate };
         if (typeof candidate === 'string' && /^[0-9a-fA-F]+$/.test(candidate) && candidate.length % 2 === 0) {
@@ -153,7 +153,24 @@
         };
         let body;
 
-        if (config.provider === 'fish') {
+        if (config.provider === 'ace') {
+            endpoint = 'https://api.acedata.cloud/fish/tts';
+            headers.model = config.model || 's2.1-pro';
+            body = {
+                text: cleanText,
+                reference_id: config.voiceId,
+                prosody: {
+                    speed: config.speed,
+                    volume: 0,
+                    normalize_loudness: true
+                },
+                normalize: true,
+                format: 'mp3',
+                sample_rate: 44100,
+                mp3_bitrate: 128,
+                latency: 'normal'
+            };
+        } else if (config.provider === 'fish') {
             endpoint = 'https://api.fish.audio/v1/tts';
             headers.model = config.model || 's2.1-pro';
             body = {
