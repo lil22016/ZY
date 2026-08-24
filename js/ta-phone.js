@@ -12,6 +12,7 @@
 
     let collections = { chat: [], moments: [] };
     let chatSortMode = 'collected'; // 'collected' 按收藏时间, 'original-asc' 按发言时间正序, 'original-desc' 按发言时间倒序
+    let activeTab = null;
 
     // 加载收藏数据
     function loadCollections() {
@@ -239,6 +240,46 @@
         }).join('');
     }
 
+    function renderTaShopping(type) {
+        const listEl = document.getElementById('ta-phone-list');
+        if (!listEl) return;
+        const isCart = type === 'cart';
+        const getter = isCart ? 'getTaCart' : 'getTaWishlist';
+        const items = (window.ShopApp && typeof window.ShopApp[getter] === 'function')
+            ? window.ShopApp[getter]() : [];
+        if (!items || items.length === 0) {
+            listEl.innerHTML = `<div class="ta-phone-empty">${isCart ? 'TA 的购物车现在是空的。' : 'TA 还没有把商品放进愿望单。'}<br><span style="font-size:.72rem;opacity:.75;">他之后逛商城时可能会自己添加。</span></div>`;
+            return;
+        }
+        listEl.innerHTML = items.map((item, idx) => {
+            const image = item.img
+                ? `<img src="${item.img}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:8px;">`
+                : `<span style="font-size:1.7rem;">${escapeHtml(item.icon || '📦')}</span>`;
+            const specs = Array.isArray(item.specs) && item.specs.length
+                ? item.specs.map(s => `${escapeHtml(s.name)}: ${escapeHtml(s.value)}`).join(' · ')
+                : '';
+            return `<div class="ta-phone-item ta-shop-item">
+                <div style="display:flex;gap:10px;align-items:center;">
+                    <div style="width:50px;height:50px;background:rgba(127,127,127,.1);border-radius:9px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;">${image}</div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:.88rem;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(item.name || '商品')}</div>
+                        <div style="font-size:.8rem;color:#ff4757;font-weight:700;margin-top:2px;">¥${Number(item.price || 0).toFixed(2)}</div>
+                        ${specs ? `<div style="font-size:.68rem;color:var(--text-light);margin-top:2px;">${specs}</div>` : ''}
+                    </div>
+                </div>
+                <div style="font-size:.68rem;color:var(--text-light);margin-top:7px;">添加于 ${formatTime(item.time || Date.now())}</div>
+                <div style="display:flex;gap:7px;margin-top:8px;">
+                    <button class="ta-shop-action primary" onclick="window.ShopApp.${isCart ? 'payForTaCartItem' : 'payForTaWishlistItem'}(${idx})">替 TA 购买</button>
+                    ${isCart ? '' : `<button class="ta-shop-action" onclick="window.ShopApp.moveTaWishToCart(${idx})">移入购物车</button>`}
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function refreshShopping() {
+        if (activeTab === 'cart' || activeTab === 'wishlist') renderTaShopping(activeTab);
+    }
+
     // 显示礼物柜中的回复
     function showGiftReplies(idx) {
         // 隐藏排序栏（礼物柜回复页面不需要）
@@ -306,8 +347,9 @@
     function showDesktop() {
         const desktop = document.querySelector('.ta-phone-desktop');
         const content = document.getElementById('ta-phone-content');
-        if (desktop) desktop.style.display = 'flex';
+        if (desktop) desktop.style.display = 'grid';
         if (content) content.style.display = 'none';
+        activeTab = null;
         updateTitle('TA的手机');
     }
 
@@ -331,6 +373,7 @@
 
     // 显示标签内容
     function showTaPhoneTab(type) {
+        activeTab = type;
         const desktop = document.querySelector('.ta-phone-desktop');
         const content = document.getElementById('ta-phone-content');
         if (desktop) desktop.style.display = 'none';
@@ -343,6 +386,11 @@
         if (type === 'gifts') {
             updateTitle('礼物柜');
             renderGiftCabinet();
+            const sortBar = document.getElementById('ta-phone-sort-bar');
+            if (sortBar) sortBar.style.display = 'none';
+        } else if (type === 'cart' || type === 'wishlist') {
+            updateTitle(type === 'cart' ? 'TA 的购物车' : 'TA 的愿望单');
+            renderTaShopping(type);
             const sortBar = document.getElementById('ta-phone-sort-bar');
             if (sortBar) sortBar.style.display = 'none';
         } else {
@@ -407,11 +455,11 @@
             }
             /* 桌面区域（弹窗内部） */
             .ta-phone-desktop {
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                gap: 36px;
-                padding: 50px 20px;
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                align-items: start;
+                gap: 24px 16px;
+                padding: 34px 22px;
                 flex-shrink: 0;
             }
             .ta-phone-app {
@@ -450,11 +498,13 @@
             }
             .ta-phone-tabs {
                 display: flex;
+                overflow-x: auto;
                 border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.08));
                 flex-shrink: 0;
             }
             .ta-phone-tab {
-                flex: 1;
+                flex: 0 0 auto;
+                min-width: 66px;
                 padding: 10px;
                 background: none;
                 border: none;
@@ -524,6 +574,21 @@
                 color: var(--text-light, #a0a0a0);
                 font-size: 0.85rem;
             }
+            .ta-shop-action {
+                flex: 1;
+                border: 1px solid var(--border-color, rgba(127,127,127,.25));
+                border-radius: 8px;
+                padding: 7px 5px;
+                background: transparent;
+                color: var(--text, #e0e0e0);
+                font-size: .73rem;
+                cursor: pointer;
+            }
+            .ta-shop-action.primary {
+                background: var(--accent-color, #e94560);
+                border-color: var(--accent-color, #e94560);
+                color: #fff;
+            }
         `;
         document.head.appendChild(style);
     }
@@ -552,7 +617,8 @@
         tryCollectChat,
         tryCollectMoment,
         showGiftReplies,
-        setChatSortMode
+        setChatSortMode,
+        refreshShopping
     };
 
     if (document.readyState === 'loading') {

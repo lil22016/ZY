@@ -111,6 +111,10 @@
         balance: 520,
         searchHistory: [],
         giftCabinet: [],
+        taCart: [],
+        taWishlist: [],
+        taPayRequests: [],
+        taShopMeta: { lastActionAt: 0 },
         currentNav: 'shop',
         currentTab: 'recommend',
         currentProduct: null,
@@ -219,6 +223,14 @@
             state.giftCabinet = (idbGift && Array.isArray(idbGift)) ? idbGift : [];
             const idbMyGift = await idbGet('products', 'myGiftCabinet');
             state.myGiftCabinet = (idbMyGift && Array.isArray(idbMyGift)) ? idbMyGift : [];
+            const idbTaCart = await idbGet('products', 'taCart');
+            state.taCart = (idbTaCart && Array.isArray(idbTaCart)) ? idbTaCart : [];
+            const idbTaWishlist = await idbGet('products', 'taWishlist');
+            state.taWishlist = (idbTaWishlist && Array.isArray(idbTaWishlist)) ? idbTaWishlist : [];
+            const idbTaPayRequests = await idbGet('products', 'taPayRequests');
+            state.taPayRequests = (idbTaPayRequests && Array.isArray(idbTaPayRequests)) ? idbTaPayRequests : [];
+            const idbTaShopMeta = await idbGet('products', 'taShopMeta');
+            state.taShopMeta = (idbTaShopMeta && typeof idbTaShopMeta === 'object') ? idbTaShopMeta : { lastActionAt: 0 };
             // 小数据从 localStorage 读取
             state.balance = parseFloat(localStorage.getItem(STORAGE_KEYS.balance) || '520');
             state.searchHistory = JSON.parse(localStorage.getItem(STORAGE_KEYS.searchHistory) || '[]');
@@ -262,6 +274,10 @@
         await idbSet('products', 'orders', state.orders);
         await idbSet('products', 'giftCabinet', state.giftCabinet);
         await idbSet('products', 'myGiftCabinet', state.myGiftCabinet || []);
+        await idbSet('products', 'taCart', state.taCart || []);
+        await idbSet('products', 'taWishlist', state.taWishlist || []);
+        await idbSet('products', 'taPayRequests', state.taPayRequests || []);
+        await idbSet('products', 'taShopMeta', state.taShopMeta || { lastActionAt: 0 });
         // 小数据存 localStorage（礼物柜同时存 localStorage 供 TA 的手机读取）
         localStorage.setItem(STORAGE_KEYS.balance, state.balance.toString());
         localStorage.setItem(STORAGE_KEYS.searchHistory, JSON.stringify(state.searchHistory));
@@ -735,12 +751,7 @@
         }
 
         // 获取选中的规格
-        const selectedSpecs = [];
-        document.querySelectorAll('#shop-modal-specs .spec-section').forEach(section => {
-            const title = section.querySelector('.spec-title').textContent;
-            const active = section.querySelector('.spec-option.active');
-            if (active) selectedSpecs.push(`${title}: ${active.textContent}`);
-        });
+        const selectedSpecs = getSelectedSpecsFromModal();
 
         state.balance -= total;
 
@@ -785,6 +796,9 @@
         } catch (e) {
             console.error('[Shop] buy saveData error:', e);
         }
+        if (target === 'dream') {
+            sendProductCard('user', product, 'A gift for you', remark || 'For you.', '#b06ab3', 'gift');
+        }
         updateBalanceDisplay();
         alert(target === 'dream' ? '已给梦角购买！' : '购买成功！');
         closeProductModal();
@@ -814,7 +828,8 @@
         if (!state.currentProduct) return;
         const product = state.currentProduct;
         const remark = document.getElementById('shop-modal-remark').value.trim();
-        const total = product.price * state.modalQty;
+        const bookedQty = state.modalQty;
+        const total = product.price * bookedQty;
 
         if (state.balance < total) {
             alert('余额不足');
@@ -828,7 +843,7 @@
             productId: product.id,
             name: product.name,
             price: product.price,
-            qty: state.modalQty,
+            qty: bookedQty,
             icon: product.icon,
             specs: '',
             remark: remark,
@@ -858,7 +873,7 @@
                     icon: product.icon,
                     img: product.img,
                     price: product.price,
-                    qty: state.modalQty,
+                    qty: bookedQty,
                     specs: '',
                     remark: remark,
                     time: Date.now(),
@@ -866,6 +881,9 @@
                 });
             }
             await saveData();
+            if (target === 'dream') {
+                sendProductCard('user', product, 'A gift for you', remark || 'For you.', '#b06ab3', 'gift');
+            }
         }, minutes * 60000);
 
         alert(`已预订，将在 ${minutes} 分钟后送达`);
@@ -1055,6 +1073,47 @@
         </div>`;
     }
 
+    function escapeCardText(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function buildGiftCard(product, tag, note, tagColor) {
+        const thumbHtml = getProductThumbHtml(product, 56);
+        const safeName = escapeCardText(product.name || '商品');
+        const safeTag = escapeCardText(tag || 'A gift for you');
+        const safeNote = escapeCardText(note || 'For you.');
+        const color = tagColor || '#9b59b6';
+        return `<div style="background:linear-gradient(135deg,#fff8fc,#fff);border:1px solid #f0d8e8;border-radius:10px;width:260px;overflow:hidden;">
+            <div style="padding:7px 8px;display:flex;gap:8px;align-items:center;">
+                <div style="width:56px;height:56px;background:#f2f2f2;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;">${thumbHtml}</div>
+                <div style="flex:1;min-width:0;line-height:1.25;">
+                    <div style="font-size:0.78rem;font-weight:650;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${safeName}</div>
+                    <div style="font-size:0.8rem;color:#ff4757;font-weight:700;margin-top:2px;">¥${Number(product.price || 0).toFixed(2)}</div>
+                    <span style="display:inline-block;background:${color};color:#fff;font-size:0.58rem;padding:1px 5px;border-radius:7px;margin-top:3px;">${safeTag}</span>
+                </div>
+            </div>
+            <div style="border-top:1px solid #f3e4ee;padding:7px 9px;font-size:0.72rem;line-height:1.45;color:#654a5d;word-break:break-word;">${safeNote}</div>
+        </div>`;
+    }
+
+    function sendProductCard(sender, product, tag, note, tagColor, messageType) {
+        if (typeof addMessage !== 'function' || !product) return;
+        addMessage({
+            id: 'shop_card_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+            sender: sender,
+            text: buildGiftCard(product, tag, note, tagColor),
+            timestamp: new Date(),
+            status: sender === 'user' ? 'sent' : 'received',
+            type: messageType || 'share',
+            shareData: { name: product.name, price: product.price, icon: product.icon, img: product.img }
+        });
+    }
+
     function getRandomReply() {
         const pool = (typeof customReplies !== 'undefined' && Array.isArray(customReplies))
             ? customReplies.map(r => String(r || '').trim()).filter(Boolean)
@@ -1063,6 +1122,49 @@
             return pool[Math.floor(Math.random() * pool.length)];
         }
         return '这个好适合你！';
+    }
+
+    function getRandomPlainReply(fallback) {
+        const pool = (typeof customReplies !== 'undefined' && Array.isArray(customReplies))
+            ? customReplies.map(r => String(r || '').trim()).filter(text => {
+                if (!text || text.length > 180) return false;
+                if (/^data:|^https?:\/\//i.test(text)) return false;
+                if (/<[a-z][\s\S]*>/i.test(text)) return false;
+                return true;
+            })
+            : [];
+        return pool.length ? pool[Math.floor(Math.random() * pool.length)] : (fallback || 'For you.');
+    }
+
+    function getSelectedSpecsFromModal() {
+        const selectedSpecs = [];
+        document.querySelectorAll('#shop-modal-specs .spec-section').forEach(section => {
+            const titleEl = section.querySelector('.spec-title');
+            const active = section.querySelector('.spec-option.active');
+            if (titleEl && active) selectedSpecs.push(`${titleEl.textContent}: ${active.textContent}`);
+        });
+        return selectedSpecs;
+    }
+
+    function makeTaShopItem(product, source) {
+        const specs = (product.specs || []).map(spec => ({
+            name: spec.name,
+            value: Array.isArray(spec.options) && spec.options.length
+                ? spec.options[Math.floor(Math.random() * spec.options.length)]
+                : ''
+        })).filter(spec => spec.value);
+        return {
+            id: 'TA_ITEM_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+            productId: product.id,
+            name: product.name,
+            price: product.price,
+            icon: product.icon,
+            img: product.img,
+            qty: 1,
+            specs: specs,
+            source: source || 'browse',
+            time: Date.now()
+        };
     }
 
     function shareProduct() {
@@ -1104,96 +1206,49 @@
     async function askTAPay() {
         const product = state.currentProduct;
         if (!product) return;
-
-        if (state.balance < product.price * state.modalQty) {
-            alert('余额不足');
-            return;
-        }
-
+        const qty = state.modalQty;
+        const total = product.price * qty;
         closeProductModal();
+        sendProductCard('user', product, '请 TA 代付', 'Will you get this for me?', '#ff9a56', 'pay-request');
+        showToast('代付请求已发送');
 
-        // 扣余额下单
-        const total = product.price * state.modalQty;
-        state.balance -= total;
-
-        // 创建订单
-        const order = {
-            id: 'ORD' + Date.now(),
-            productId: product.id,
-            name: product.name,
-            price: product.price,
-            qty: state.modalQty,
-            icon: product.icon,
-            specs: '',
-            remark: '',
-            target: 'self',
-            status: 'completed',
-            time: Date.now(),
-            replies: generateReplies()
-        };
-        state.orders.unshift(order);
-
-        // 放入我的礼物柜
-        if (window.GiftCabinetApp) window.GiftCabinetApp.add(product, state.modalQty, '代付', order.id);
-
-        try { await saveData(); } catch (e) { console.error('[Shop] askTAPay saveData error:', e); }
-        updateBalanceDisplay();
-
-        // 发送代付请求卡片（与分享卡片同结构）
-        const thumbHtml = getProductThumbHtml(product, 52);
-        const payHtml = `<div style="background:linear-gradient(135deg,#fff8f0,#fff);border:1px solid #ffd8b0;border-radius:8px;padding:4px 6px;display:flex;gap:5px;align-items:center;width:260px;">
-            <div style="width:52px;height:52px;background:#f0f0f0;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;">${thumbHtml}</div>
-            <div style="flex:1;min-width:0;line-height:1.2;">
-                <div style="font-size:0.72rem;color:#666;">帮我买这个好不好~</div>
-                <div style="font-size:0.72rem;font-weight:600;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${product.name}</div>
-                <div style="font-size:0.78rem;color:#ff4757;font-weight:700;">¥${total}</div>
-                <span style="display:inline-block;background:linear-gradient(135deg,#ff9a56,#ff6b35);color:#fff;font-size:0.55rem;padding:0px 4px;border-radius:6px;margin-top:1px;">💝 已帮TA付</span>
-            </div>
-        </div>`;
-
-        if (typeof addMessage === 'function') {
-            addMessage({
-                id: 'pay_req_' + Date.now(),
-                sender: 'user',
-                text: payHtml,
-                timestamp: new Date(),
-                status: 'sent',
-                type: 'pay-request',
-                shareData: { name: product.name, price: product.price, icon: product.icon, img: product.img }
-            });
-        }
-
-        showToast('已代付下单');
-
-        // TA 自动回复 + 发送分享图
-        setTimeout(() => {
-            // TA 回复
-            if (typeof addMessage === 'function') {
-                addMessage({
-                    id: 'pay_reply_' + Date.now(),
-                    sender: 'ta',
-                    text: getRandomReply(),
-                    timestamp: new Date(),
-                    status: 'received',
-                    type: 'normal'
-                });
-            }
-            // TA 发送分享图（已代付）
-            setTimeout(() => {
-                const shareHtml = buildShareCard(product, '已代付', '#ff9a56');
+        setTimeout(async () => {
+            const accepted = Math.random() < 0.70;
+            if (!accepted) {
+                const refusals = ['No.', 'Not this time.', 'You can afford it yourself.', 'Tempting. Still no.'];
                 if (typeof addMessage === 'function') {
                     addMessage({
-                        id: 'pay_share_' + Date.now(),
+                        id: 'pay_refused_' + Date.now(),
                         sender: 'ta',
-                        text: shareHtml,
+                        text: refusals[Math.floor(Math.random() * refusals.length)],
                         timestamp: new Date(),
                         status: 'received',
-                        type: 'share',
-                        shareData: { name: product.name, price: product.price, icon: product.icon, img: product.img }
+                        type: 'normal'
                     });
                 }
-            }, 800);
-        }, 1500 + Math.random() * 2000);
+                showToast('TA 拒绝了这次代付');
+                return;
+            }
+            if (state.balance < total) {
+                if (typeof addMessage === 'function') {
+                    addMessage({ id: 'pay_no_balance_' + Date.now(), sender: 'ta', text: 'Not enough balance.', timestamp: new Date(), status: 'received', type: 'normal' });
+                }
+                return;
+            }
+
+            state.balance -= total;
+            const order = {
+                id: 'ORD_TA_PAY_' + Date.now(), productId: product.id, name: product.name,
+                price: product.price, qty: qty, icon: product.icon, specs: '', remark: '',
+                target: 'self', status: 'completed', time: Date.now(), replies: generateReplies(), source: 'ta-paid-for-user'
+            };
+            state.orders.unshift(order);
+            if (window.GiftCabinetApp) window.GiftCabinetApp.add(product, qty, 'TA代付', order.id);
+            try { await saveData(); } catch (e) { console.error('[Shop] askTAPay saveData error:', e); }
+            updateBalanceDisplay();
+            sendProductCard('ta', product, 'Paid for you', getRandomPlainReply('Fine. It is yours.'), '#ff9a56', 'gift');
+            showToast('TA 接受了代付');
+        }, 1200 + Math.random() * 1800);
     }
 
     // 30% 概率自动从购物车购买（整个会话期间随机触发）
@@ -1257,19 +1312,239 @@
         updateBalanceDisplay();
         updateCartBadge();
 
-        // TA 发送分享图（已自动下单）
-        const shareHtml = buildShareCard(product, '已自动下单', '#ff9a56');
+        // TA 从你的购物车替你买下时，也按礼物卡片发送，并附带一句字卡。
+        sendProductCard('ta', product, 'A gift for you', getRandomPlainReply('I got this for you.'), '#ff9a56', 'gift');
+    }
+
+    // ========== TA 自主逛商城 ==========
+    function getTaCart() { return state.taCart || []; }
+    function getTaWishlist() { return state.taWishlist || []; }
+
+    function refreshTaPhoneShopping() {
+        if (window.TaPhoneApp && typeof window.TaPhoneApp.refreshShopping === 'function') {
+            window.TaPhoneApp.refreshShopping();
+        }
+    }
+
+    function addTaGiftCabinetItem(product, qty, specs, remark, order) {
+        state.giftCabinet.unshift({
+            orderId: order.id,
+            name: product.name,
+            icon: product.icon,
+            img: product.img,
+            price: product.price,
+            qty: qty || 1,
+            specs: specs || '',
+            remark: remark || '',
+            time: Date.now(),
+            replies: order.replies || []
+        });
+    }
+
+    async function purchaseForTa(item, remark, source) {
+        if (!item) return false;
+        const product = state.products.find(p => p.id === item.productId) || item;
+        const qty = item.qty || 1;
+        const total = Number(item.price || product.price || 0) * qty;
+        if (state.balance < total) {
+            alert('余额不足，暂时不能替 TA 购买');
+            return false;
+        }
+        state.balance -= total;
+        const specs = Array.isArray(item.specs)
+            ? item.specs.map(s => `${s.name}: ${s.value}`).join(' | ')
+            : (item.specs || '');
+        const order = {
+            id: 'ORD_FOR_TA_' + Date.now(), productId: product.id, name: product.name,
+            price: Number(item.price || product.price || 0), qty: qty, icon: product.icon,
+            specs: specs, remark: remark || '', target: 'dream', status: 'completed',
+            time: Date.now(), replies: generateReplies(), source: source || 'ta-cart'
+        };
+        state.orders.unshift(order);
+        addTaGiftCabinetItem(product, qty, specs, remark, order);
+        state.taCart = (state.taCart || []).filter(x => x.id !== item.id);
+        state.taWishlist = (state.taWishlist || []).filter(x => x.id !== item.id && x.productId !== item.productId);
+        try { await saveData(); } catch (e) { console.error('[Shop] purchaseForTa saveData error:', e); }
+        updateBalanceDisplay();
+        refreshTaPhoneShopping();
+        sendProductCard('user', product, 'A gift for you', remark || 'For you.', '#b06ab3', 'gift');
+        showToast('已经替 TA 买下了');
+        return true;
+    }
+
+    async function payForTaCartItem(index) {
+        const item = (state.taCart || [])[index];
+        if (!item) return;
+        const remark = window.prompt('可以写一句礼物备注（也可以留空）', '') || '';
+        await purchaseForTa(item, remark.trim(), 'ta-cart');
+    }
+
+    async function payForTaWishlistItem(index) {
+        const item = (state.taWishlist || [])[index];
+        if (!item) return;
+        const remark = window.prompt('可以写一句礼物备注（也可以留空）', '') || '';
+        await purchaseForTa(item, remark.trim(), 'ta-wishlist');
+    }
+
+    async function moveTaWishToCart(index) {
+        const item = (state.taWishlist || [])[index];
+        if (!item) return;
+        if (!(state.taCart || []).some(x => x.productId === item.productId)) {
+            state.taCart.unshift(Object.assign({}, item, { id: 'TA_CART_' + Date.now(), source: 'wishlist', time: Date.now() }));
+        }
+        state.taWishlist.splice(index, 1);
+        await saveData();
+        refreshTaPhoneShopping();
+        showToast('已移入 TA 的购物车');
+    }
+
+    async function taBuyForSelf(product) {
+        if (!product || state.balance < Number(product.price || 0)) return false;
+        state.balance -= Number(product.price || 0);
+        const order = {
+            id: 'ORD_TA_SELF_' + Date.now(), productId: product.id, name: product.name,
+            price: product.price, qty: 1, icon: product.icon, specs: '', remark: '',
+            target: 'dream', status: 'completed', time: Date.now(), replies: generateReplies(), source: 'ta-autonomous-self'
+        };
+        state.orders.unshift(order);
+        addTaGiftCabinetItem(product, 1, '', '', order);
+        state.taCart = (state.taCart || []).filter(x => x.productId !== product.id);
+        await saveData();
+        updateBalanceDisplay();
+        refreshTaPhoneShopping();
+        sendProductCard('ta', product, 'Bought for myself', getRandomPlainReply('I wanted this.'), '#667eea', 'share');
+        return true;
+    }
+
+    async function taGiftUser(product) {
+        if (!product || state.balance < Number(product.price || 0)) return false;
+        state.balance -= Number(product.price || 0);
+        const note = getRandomPlainReply('A gift for you.');
+        const order = {
+            id: 'ORD_TA_GIFT_' + Date.now(), productId: product.id, name: product.name,
+            price: product.price, qty: 1, icon: product.icon, specs: '', remark: note,
+            target: 'self', status: 'completed', time: Date.now(), replies: [], source: 'ta-gift-user'
+        };
+        state.orders.unshift(order);
+        if (window.GiftCabinetApp) window.GiftCabinetApp.add(product, 1, 'TA送礼', order.id);
+        await saveData();
+        updateBalanceDisplay();
+        sendProductCard('ta', product, 'A gift for you', note, '#b06ab3', 'gift');
+        return true;
+    }
+
+    function buildTaPayRequestCard(product, requestId) {
+        const thumbHtml = getProductThumbHtml(product, 56);
+        return `<div data-ta-pay-request="${requestId}" style="background:linear-gradient(135deg,#fffaf2,#fff);border:1px solid #f2d4a7;border-radius:10px;width:260px;overflow:hidden;">
+            <div style="padding:7px 8px;display:flex;gap:8px;align-items:center;">
+                <div style="width:56px;height:56px;background:#f2f2f2;border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;">${thumbHtml}</div>
+                <div style="min-width:0;flex:1;"><div style="font-size:.72rem;color:#7b6040;">Will you get this for me?</div><div style="font-size:.78rem;font-weight:650;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeCardText(product.name)}</div><div style="color:#ff4757;font-weight:700;font-size:.8rem;">¥${Number(product.price || 0).toFixed(2)}</div></div>
+            </div>
+            <div class="ta-pay-actions" style="display:flex;gap:6px;padding:0 8px 8px;">
+                <button type="button" onclick="event.stopPropagation();window.ShopApp.respondToTaPay('${requestId}',true,this)" style="flex:1;border:0;border-radius:7px;padding:6px;background:#222;color:#fff;">帮他买</button>
+                <button type="button" onclick="event.stopPropagation();window.ShopApp.respondToTaPay('${requestId}',false,this)" style="flex:1;border:1px solid #ccc;border-radius:7px;padding:6px;background:#fff;color:#555;">暂时不要</button>
+            </div>
+        </div>`;
+    }
+
+    async function taRequestUserPay(product) {
+        const request = {
+            id: 'TA_PAY_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+            productId: product.id, name: product.name, price: product.price, icon: product.icon,
+            img: product.img, qty: 1, specs: [], status: 'pending', time: Date.now()
+        };
+        state.taPayRequests.unshift(request);
+        if (!(state.taCart || []).some(x => x.productId === product.id)) {
+            state.taCart.unshift(Object.assign(makeTaShopItem(product, 'pay-request'), { requestId: request.id }));
+        }
+        await saveData();
+        refreshTaPhoneShopping();
         if (typeof addMessage === 'function') {
             addMessage({
-                id: 'auto_buy_' + Date.now(),
-                sender: 'ta',
-                text: shareHtml,
-                timestamp: new Date(),
-                status: 'received',
-                type: 'share',
+                id: 'ta_pay_request_' + Date.now(), sender: 'ta', text: buildTaPayRequestCard(product, request.id),
+                timestamp: new Date(), status: 'received', type: 'pay-request',
                 shareData: { name: product.name, price: product.price, icon: product.icon, img: product.img }
             });
         }
+    }
+
+    async function respondToTaPay(requestId, accepted, buttonEl) {
+        const request = (state.taPayRequests || []).find(r => r.id === requestId);
+        if (!request || request.status !== 'pending') {
+            showToast('这个请求已经处理过了');
+            return;
+        }
+        const product = state.products.find(p => p.id === request.productId) || request;
+        if (accepted) {
+            const matchingItem = (state.taCart || []).find(x => x.requestId === requestId || x.productId === request.productId) || request;
+            const ok = await purchaseForTa(matchingItem, 'For you.', 'ta-pay-request');
+            if (!ok) return;
+            request.status = 'paid';
+            await saveData();
+        } else {
+            request.status = 'declined';
+            await saveData();
+            if (typeof addMessage === 'function') {
+                addMessage({ id: 'ta_pay_declined_' + Date.now(), sender: 'user', text: 'Not this time.', timestamp: new Date(), status: 'sent', type: 'normal' });
+                setTimeout(() => addMessage({ id: 'ta_pay_declined_reply_' + Date.now(), sender: 'ta', text: 'Fine.', timestamp: new Date(), status: 'received', type: 'normal' }), 700);
+            }
+            showToast('你拒绝了这次代付');
+        }
+        const card = buttonEl && buttonEl.closest ? buttonEl.closest('[data-ta-pay-request]') : null;
+        if (card) {
+            const actions = card.querySelector('.ta-pay-actions');
+            if (actions) actions.innerHTML = `<div style="width:100%;text-align:center;font-size:.7rem;color:#777;padding:5px;">${accepted ? '已帮他购买' : '已拒绝'}</div>`;
+        }
+    }
+
+    async function tryTaShopAction() {
+        if (!state.products || !state.products.length) return;
+        const candidates = state.products.filter(p => p && Number(p.price) >= 0);
+        if (!candidates.length) return;
+        const product = candidates[Math.floor(Math.random() * candidates.length)];
+        const roll = Math.random();
+        state.taShopMeta = { lastActionAt: Date.now(), lastProductId: product.id };
+
+        if (roll < 0.28) {
+            if (!(state.taCart || []).some(x => x.productId === product.id)) {
+                state.taCart.unshift(makeTaShopItem(product, 'autonomous'));
+                state.taCart = state.taCart.slice(0, 20);
+                await saveData();
+                refreshTaPhoneShopping();
+            }
+        } else if (roll < 0.52) {
+            if (!(state.taWishlist || []).some(x => x.productId === product.id)) {
+                state.taWishlist.unshift(makeTaShopItem(product, 'autonomous'));
+                state.taWishlist = state.taWishlist.slice(0, 20);
+                await saveData();
+                refreshTaPhoneShopping();
+            }
+        } else if (roll < 0.68) {
+            await taRequestUserPay(product);
+        } else if (roll < 0.82) {
+            await taBuyForSelf(product);
+        } else if (roll < 0.94) {
+            await taGiftUser(product);
+        } else {
+            sendProductCard('ta', product, 'Found this', getRandomPlainReply('Look what I found.'), '#667eea', 'share');
+            await saveData();
+        }
+    }
+
+    let taShopTimer = null;
+    function startTaShopTimer(initial) {
+        if (taShopTimer) return;
+        const delay = initial ? (45000 + Math.random() * 75000) : (3 * 60000 + Math.random() * 7 * 60000);
+        taShopTimer = setTimeout(async () => {
+            taShopTimer = null;
+            try { await tryTaShopAction(); } catch (e) { console.error('[Shop] TA autonomous action failed:', e); }
+            startTaShopTimer(false);
+        }, delay);
+    }
+
+    function stopTaShopTimer() {
+        if (taShopTimer) clearTimeout(taShopTimer);
+        taShopTimer = null;
     }
 
     // ========== 回复 ==========
@@ -1679,6 +1954,8 @@
 
         // 启动自动购物车购买定时器（整个会话期间随机触发，30%概率）
         startAutoBuyTimer();
+        // TA 也会独立逛商城：首次约 45~120 秒，之后每 3~10 分钟一次。
+        startTaShopTimer(true);
     }
 
     // ========== 暴露到全局 ==========
@@ -1723,6 +2000,12 @@
         closeBalanceModal,
         saveBalance,
         getGiftCabinet,
+        getTaCart,
+        getTaWishlist,
+        payForTaCartItem,
+        payForTaWishlistItem,
+        moveTaWishToCart,
+        respondToTaPay,
         handleWishImgUpload,
         addToCartFromModal,
         deleteSelected,
@@ -1731,6 +2014,9 @@
         cancelOrder,
         startAutoBuyTimer,
         stopAutoBuyTimer,
+        startTaShopTimer,
+        stopTaShopTimer,
+        runTaShopActionNow: tryTaShopAction,
         _getState: () => state,
         _saveData: saveData
     };
