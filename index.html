@@ -1619,6 +1619,18 @@
                     </div>
                     <span class="ta-phone-app-name">礼物柜</span>
                 </div>
+                <div class="ta-phone-app" onclick="window.TaPhoneApp.showTaPhoneTab('cart')">
+                    <div class="ta-phone-app-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1"/><circle cx="19" cy="20" r="1"/><path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 2-1.6L21 8H6"/></svg>
+                    </div>
+                    <span class="ta-phone-app-name">购物车</span>
+                </div>
+                <div class="ta-phone-app" onclick="window.TaPhoneApp.showTaPhoneTab('wishlist')">
+                    <div class="ta-phone-app-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>
+                    </div>
+                    <span class="ta-phone-app-name">愿望单</span>
+                </div>
             </div>
             <!-- 内容列表 -->
             <div class="ta-phone-content" id="ta-phone-content" style="display:none;">
@@ -1626,6 +1638,8 @@
                     <button class="ta-phone-tab" data-tab="chat" onclick="window.TaPhoneApp.showTaPhoneTab('chat')">聊天</button>
                     <button class="ta-phone-tab" data-tab="moments" onclick="window.TaPhoneApp.showTaPhoneTab('moments')">朋友圈</button>
                     <button class="ta-phone-tab" data-tab="gifts" onclick="window.TaPhoneApp.showTaPhoneTab('gifts')">礼物柜</button>
+                    <button class="ta-phone-tab" data-tab="cart" onclick="window.TaPhoneApp.showTaPhoneTab('cart')">购物车</button>
+                    <button class="ta-phone-tab" data-tab="wishlist" onclick="window.TaPhoneApp.showTaPhoneTab('wishlist')">愿望单</button>
                 </div>
                 <div id="ta-phone-sort-bar" style="display:none;gap:6px;padding:6px 12px;justify-content:flex-end;flex-wrap:wrap;">
                     <button class="ta-phone-sort-btn active" data-sort="collected" onclick="window.TaPhoneApp.setChatSortMode('collected')" style="background:none;border:1px solid var(--border-color,rgba(255,255,255,0.15));border-radius:12px;padding:3px 10px;font-size:0.7rem;color:var(--text-light,#aaa);cursor:pointer;">按收藏时间</button>
@@ -4336,7 +4350,7 @@
     <script src="js/utils.js"></script>
     <script src="js/backup-engine.js?v=20260824-tts"></script>
     <script src="js/state.js"></script>
-    <script src="js/core.js?v=20260824-tts6"></script>
+    <script src="js/core.js?v=20260824-tts5"></script>
     <script src="js/home.js?v=20260824-tts"></script>
     <script src="js/tts.js?v=20260824-7"></script>
 
@@ -4359,8 +4373,8 @@
     <script src="js/listeners.js?v=20260824-tts"></script>
     <script src="js/app.js"></script>
     <script src="js/pet-game.js"></script>
-    <script src="js/ta-phone.js"></script>
-    <script src="js/shop.js"></script>
+    <script src="js/ta-phone.js?v=20260824-shopping2"></script>
+    <script src="js/shop.js?v=20260824-shopping2"></script>
     <script src="js/gift-cabinet.js"></script>
     <script src="js/moments.js"></script>
     <script src="js/spark.js"></script>
