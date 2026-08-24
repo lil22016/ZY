@@ -511,6 +511,10 @@
                         </div>
                         <span class="app-name">Zmilk地图</span>
                     </div>
+                    <div class="app-item" onclick="window.CycleApp && window.CycleApp.open()">
+                        <div class="app-icon" data-app="cycle"><i class="fas fa-moon"></i></div>
+                        <span class="app-name">月相周期</span>
+                    </div>
                 </div>
             </div>
             <!-- 翻页指示器 -->
@@ -4233,9 +4237,9 @@
                     <p>是 / 否 二元选择</p>
                 </div>
                 <div class="decision-option-card" id="open-wheel">
-                    <i class="fas fa-magic"></i>
-                    <h3>随机抽签</h3>
-                    <p>自定义选项随机抽取</p>
+                    <i class="fas fa-list-check"></i>
+                    <h3>让 Loki 选择</h3>
+                    <p>把选择题发送到聊天</p>
                 </div>
             </div>
             <div class="modal-buttons">
@@ -4247,10 +4251,12 @@
     <div class="modal" id="wheel-modal">
         <div class="modal-content">
             <div class="modal-title">
-                <i class="fas fa-magic"></i><span>随机抽签</span>
+                <i class="fas fa-list-check"></i><span>让 Loki 选择</span>
             </div>
             
             <div class="picker-wrapper">
+                <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px;">你的问题</label>
+                <textarea id="choice-question-input" rows="2" placeholder="例如：今晚吃什么？" style="width:100%;box-sizing:border-box;resize:none;border:1px solid var(--border-color);border-radius:10px;padding:10px;background:var(--secondary-bg);color:var(--text-primary);font:inherit;margin-bottom:12px;"></textarea>
                 <div class="picker-box-stage">
                     <div class="picker-cards-row" id="picker-cards-row"></div>
                     <div class="picker-result-text" id="wheel-result"></div>
@@ -4266,7 +4272,7 @@
     
             <div class="modal-buttons">
                 <button class="modal-btn modal-btn-secondary" id="close-wheel">关闭</button>
-                <button class="modal-btn modal-btn-primary" id="spin-wheel-btn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 12a10 10 0 0 1 18.8-3.6M22 12a10 10 0 0 1-18.8 3.6"/></svg> 开始抽签</button>
+                <button class="modal-btn modal-btn-primary" id="spin-wheel-btn"><i class="fas fa-paper-plane" style="margin-right:5px;"></i>发送给 Loki</button>
                 <button class="modal-btn modal-btn-primary" id="send-wheel-result" style="display:none;">发送结果</button>
             </div>
         </div>
@@ -4350,7 +4356,7 @@
     <script src="js/utils.js"></script>
     <script src="js/backup-engine.js?v=20260824-tts"></script>
     <script src="js/state.js"></script>
-    <script src="js/core.js?v=20260824-tts5"></script>
+    <script src="js/core.js?v=20260824-messageflow1"></script>
     <script src="js/home.js?v=20260824-tts"></script>
     <script src="js/tts.js?v=20260824-8"></script>
 
@@ -4366,7 +4372,7 @@
     <script src="js/features/map.js"></script>
 
     <!-- == 合并模块 == -->
-    <script src="js/games.js"></script>
+    <script src="js/games.js?v=20260824-choice1"></script>
     <script src="js/features.js?v=20260820-media-session"></script>
     <script src="js/data.js"></script>
     <script src="js/onboarding.js"></script>
@@ -4374,7 +4380,8 @@
     <script src="js/app.js"></script>
     <script src="js/pet-game.js"></script>
     <script src="js/ta-phone.js?v=20260824-shopping2"></script>
-    <script src="js/shop.js?v=20260824-shopping3"></script>
+    <script src="js/shop.js?v=20260824-giftread1"></script>
+    <script src="js/cycle.js?v=20260824-1"></script>
     <script src="js/gift-cabinet.js"></script>
     <script src="js/moments.js"></script>
     <script src="js/spark.js"></script>
