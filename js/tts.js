@@ -562,6 +562,39 @@
         });
     }
 
+    // 独立接管喇叭按钮，不依赖网站原有 listeners.js 的初始化是否完整成功。
+    // 使用捕获阶段可避免旧聊天事件或弹层逻辑提前截断点击。
+    function setupDirectSpeakerClick() {
+        if (window.__lokiTTSDirectSpeakerBound) return;
+        window.__lokiTTSDirectSpeakerBound = true;
+        document.addEventListener('click', function (event) {
+            const button = event.target && event.target.closest
+                ? event.target.closest('.tts-action-btn')
+                : null;
+            if (!button) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+            if (button.disabled || button.classList.contains('tts-busy')) return;
+
+            const wrapper = button.closest('.message-wrapper');
+            const messageId = wrapper && wrapper.dataset ? wrapper.dataset.id : '';
+            if (!messageId) {
+                notify('无法识别这条消息', 'error', 2500);
+                return;
+            }
+
+            // 先同步改变界面，确保用户触碰后立刻看到反馈。
+            setMessageGenerating(messageId, true, '正在响应，请稍候…');
+            Promise.resolve(convertMessage(messageId)).catch(function (error) {
+                console.error('[TTS] 喇叭点击处理失败:', error);
+                setMessageGenerating(messageId, false, '');
+                notify(error.message || '语音处理失败', 'error', 4000);
+            });
+        }, true);
+    }
+
     function initUI() {
         injectStyles();
         updateManualState();
@@ -591,6 +624,7 @@
         });
         writeForm();
         setupLongPress();
+        setupDirectSpeakerClick();
     }
 
     window.LokiTTS = {
