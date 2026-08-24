@@ -3796,6 +3796,7 @@
                 <div class="tts-field">
                     <label for="tts-provider">TTS 服务商</label>
                     <select id="tts-provider">
+                        <option value="ace">ACE Data Cloud（Fish TTS）</option>
                         <option value="fish">Fish Audio</option>
                         <option value="minimax">MiniMax</option>
                         <option value="custom">自定义代理 / 兼容接口</option>
@@ -3814,7 +3815,7 @@
                 </div>
                 <div class="tts-field">
                     <label for="tts-model">模型</label>
-                    <input type="text" id="tts-model" autocomplete="off" placeholder="Fish: s2.1-pro / MiniMax: speech-2.8-hd">
+                    <input type="text" id="tts-model" autocomplete="off" placeholder="ACE/Fish: s2.1-pro / MiniMax: speech-2.8-hd">
                 </div>
                 <div class="tts-field" id="tts-endpoint-field" style="display:none;">
                     <label for="tts-endpoint">代理接口地址</label>
@@ -4337,7 +4338,7 @@
     <script src="js/state.js"></script>
     <script src="js/core.js?v=20260824-tts"></script>
     <script src="js/home.js?v=20260824-tts"></script>
-    <script src="js/tts.js?v=20260824-1"></script>
+    <script src="js/tts.js?v=20260824-2"></script>
 
     <!-- == 功能模块 == -->
     <script src="js/features/mood.js"></script>
