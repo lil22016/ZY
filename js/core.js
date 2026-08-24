@@ -1877,7 +1877,7 @@ function createMessageFragment(msg, prevMsg, nextMsg, lastSenderRef) {
     let actionsHTML = '';
     if (settings.replyEnabled) actionsHTML += `<button class="meta-action-btn reply-btn" title="回复"><i class="fas fa-reply"></i></button>`;
     if (!isVoice && msg.type === 'normal' && msg.text) {
-        actionsHTML += `<button class="meta-action-btn tts-action-btn" title="转换成语音"><i class="fas fa-volume-up"></i></button>`;
+        actionsHTML += `<button type="button" class="meta-action-btn tts-action-btn" title="播放语音" onclick="if(window.LokiTTS&&window.LokiTTS.handleSpeakerClick){window.LokiTTS.handleSpeakerClick(event,this);}else{alert('TTS 模块尚未加载，请刷新页面');}return false;"><i class="fas fa-volume-up"></i></button>`;
     }
     // 不显示头像时，对方消息添加 @ 按钮
     if (msg.sender !== 'user' && !settings.inChatAvatarEnabled) {

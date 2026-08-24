@@ -595,6 +595,29 @@
         }, true);
     }
 
+    // 由气泡按钮自身直接调用。这样不经过聊天区的事件委托，兼容 iOS 长按菜单。
+    function handleSpeakerClick(event, button) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+        }
+        if (!button || button.disabled || button.classList.contains('tts-busy')) return false;
+        const wrapper = button.closest('.message-wrapper');
+        const messageId = wrapper && wrapper.dataset ? wrapper.dataset.id : '';
+        if (!messageId) {
+            notify('无法识别这条消息', 'error', 2500);
+            return false;
+        }
+        setMessageGenerating(messageId, true, '正在响应，请稍候…');
+        Promise.resolve(convertMessage(messageId)).catch(function (error) {
+            console.error('[TTS] 喇叭直接调用失败:', error);
+            setMessageGenerating(messageId, false, '');
+            notify(error.message || '语音处理失败', 'error', 4000);
+        });
+        return false;
+    }
+
     function initUI() {
         injectStyles();
         updateManualState();
@@ -624,12 +647,12 @@
         });
         writeForm();
         setupLongPress();
-        setupDirectSpeakerClick();
     }
 
     window.LokiTTS = {
         openSettings,
         closeSettings,
+        handleSpeakerClick,
         convertMessage,
         createVoiceMessage,
         resolveMessageAudio,
