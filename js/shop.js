@@ -1104,14 +1104,28 @@
     }
 
     function sendProductCard(sender, product, tag, note, tagColor, messageType) {
-        if (typeof addMessage !== 'function' || !product) return;
+        if (!product) return;
+        const cardText = buildGiftCard(product, tag, note, tagColor);
+        const type = messageType || 'share';
+        if (sender === 'user' && typeof sendMessage === 'function') {
+            sendMessage(cardText, type);
+            const latest = (typeof messages !== 'undefined' && Array.isArray(messages))
+                ? messages[messages.length - 1]
+                : null;
+            if (latest && latest.sender === 'user') {
+                latest.shareData = { name: product.name, price: product.price, icon: product.icon, img: product.img };
+                if (typeof throttledSaveData === 'function') throttledSaveData();
+            }
+            return;
+        }
+        if (typeof addMessage !== 'function') return;
         addMessage({
             id: 'shop_card_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
             sender: sender,
-            text: buildGiftCard(product, tag, note, tagColor),
+            text: cardText,
             timestamp: new Date(),
             status: sender === 'user' ? 'sent' : 'received',
-            type: messageType || 'share',
+            type: type,
             shareData: { name: product.name, price: product.price, icon: product.icon, img: product.img }
         });
     }

@@ -961,7 +961,7 @@ window._runMsgSearch = function() {
     }).join('') + (results.length > 100 ? `<div style="text-align:center;padding:10px;font-size:12px;color:var(--text-secondary);">仅显示前100条，共找到 ${results.length} 条</div>` : '');
 };
 
-let wheelOptions = ["是", "否", "再想一想", "听你的"];
+let wheelOptions = ["选项 1", "选项 2", "选项 3"];
 let wheelResultText = "";
 
 function initDecisionModule() {
@@ -1020,7 +1020,7 @@ function initDecisionModule() {
     }
 
     if (spinBtn && !spinBtn.dataset.initialized) {
-        spinBtn.addEventListener('click', doPick);
+        spinBtn.addEventListener('click', sendChoiceQuestion);
         spinBtn.dataset.initialized = 'true';
     }
     
@@ -1106,69 +1106,59 @@ function renderPickerCards(selectedIndex = -1) {
     });
 }
 
-function doPick() {
+function escapeChoiceText(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function buildChoiceCard(question, options, selectedIndex) {
+    const rows = options.map((option, index) => {
+        const selected = index === selectedIndex;
+        return `<div style="display:flex;align-items:center;gap:7px;padding:6px 8px;margin-top:5px;border-radius:8px;border:1px solid ${selected ? 'var(--accent-color)' : 'var(--border-color)'};background:${selected ? 'rgba(var(--accent-color-rgb),0.12)' : 'var(--primary-bg)'};color:var(--text-primary);"><span style="width:18px;text-align:center;color:var(--accent-color);font-weight:700;">${selected ? '✓' : String.fromCharCode(65 + index)}</span><span>${escapeChoiceText(option)}</span></div>`;
+    }).join('');
+    const footer = selectedIndex < 0
+        ? '<div style="font-size:11px;color:var(--text-secondary);margin-top:8px;">Loki 正在考虑…</div>'
+        : '<div style="font-size:11px;color:var(--text-secondary);margin-top:8px;">Loki has chosen.</div>';
+    return `<div class="loki-choice-card" style="width:250px;max-width:100%;"><div style="font-weight:650;color:var(--text-primary);line-height:1.45;word-break:break-word;">${escapeChoiceText(question)}</div>${rows}${footer}</div>`;
+}
+
+function sendChoiceQuestion() {
     if (wheelOptions.length < 2) {
         showNotification("请至少添加两个选项", "warning");
         return;
     }
-    const spinBtn = document.getElementById('spin-wheel-btn');
-    const resultDisplay = document.getElementById('wheel-result');
-    const sendBtn = document.getElementById('send-wheel-result');
-    
-    spinBtn.disabled = true;
-    sendBtn.style.display = 'none';
-    resultDisplay.classList.remove('show');
-    resultDisplay.textContent = "";
-
-    let flashCount = 0;
-    const totalFlashes = 16 + Math.floor(Math.random() * 8);
-    const finalIndex = Math.floor(Math.random() * wheelOptions.length);
-    
-    function flash() {
-        const row = document.getElementById('picker-cards-row');
-        if (!row) return;
-        const cards = row.querySelectorAll('.picker-card');
-        cards.forEach(c => c.style.transform = '');
-        
-        let showIdx;
-        if (flashCount < totalFlashes - 3) {
-            showIdx = Math.floor(Math.random() * wheelOptions.length);
-        } else {
-            showIdx = finalIndex;
-        }
-        
-        cards.forEach((c, i) => {
-            if (i === showIdx) {
-                c.style.transform = 'translateY(-4px) scale(1.06)';
-                c.style.background = `linear-gradient(135deg, var(--accent-color), rgba(var(--accent-color-rgb),0.7))`;
-                c.style.borderColor = 'transparent';
-                c.style.color = '#fff';
-            } else {
-                c.style.transform = '';
-                c.style.background = '';
-                c.style.borderColor = '';
-                c.style.color = '';
-            }
-        });
-        
-        flashCount++;
-        const delay = flashCount < 8 ? 80 : flashCount < 14 ? 130 : 250;
-        if (flashCount < totalFlashes) {
-            setTimeout(flash, delay);
-        } else {
-            setTimeout(() => {
-                renderPickerCards(finalIndex);
-                wheelResultText = wheelOptions[finalIndex];
-                resultDisplay.innerHTML = `<i class="fas fa-star" style="font-size:14px; margin-right:6px;"></i>${wheelResultText}`;
-                resultDisplay.classList.add('show');
-                spinBtn.disabled = false;
-                sendBtn.style.display = 'inline-block';
-                playSound('favorite');
-            }, 300);
-        }
+    const questionInput = document.getElementById('choice-question-input');
+    const question = questionInput ? questionInput.value.trim() : '';
+    const options = wheelOptions.map(v => String(v || '').trim()).filter(Boolean);
+    if (!question) {
+        showNotification('请先输入问题', 'warning');
+        return;
     }
-    
-    flash();
+    if (options.length < 2) {
+        showNotification('请至少填写两个选项', 'warning');
+        return;
+    }
+    const spinBtn = document.getElementById('spin-wheel-btn');
+    spinBtn.disabled = true;
+    const finalIndex = Math.floor(Math.random() * options.length);
+    const cardHtml = buildChoiceCard(question, options, -1);
+    if (typeof sendMessage === 'function') sendMessage(cardHtml, 'share');
+    const message = (typeof messages !== 'undefined' && Array.isArray(messages)) ? messages[messages.length - 1] : null;
+    if (message) message.choiceData = { question, options, selectedIndex: -1 };
+    hideModal(document.getElementById('wheel-modal'));
+    if (questionInput) questionInput.value = '';
+    spinBtn.disabled = false;
+    showNotification('选择题已发送，Loki 正在考虑…', 'info', 2200);
+    setTimeout(() => {
+        if (!message || !Array.isArray(messages) || !messages.includes(message)) return;
+        message.choiceData.selectedIndex = finalIndex;
+        message.text = buildChoiceCard(question, options, finalIndex);
+        message.status = 'read';
+        if (typeof renderMessages === 'function') renderMessages();
+        if (typeof throttledSaveData === 'function') throttledSaveData();
+        if (typeof playSound === 'function') playSound('receive');
+    }, 5000 + Math.random() * 2000);
 }
 
 function handleCoinToss() {

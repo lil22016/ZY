@@ -1877,7 +1877,7 @@ function createMessageFragment(msg, prevMsg, nextMsg, lastSenderRef) {
     let actionsHTML = '';
     if (settings.replyEnabled) actionsHTML += `<button class="meta-action-btn reply-btn" title="回复"><i class="fas fa-reply"></i></button>`;
     if (!isVoice && msg.type === 'normal' && msg.text) {
-        actionsHTML += `<button type="button" class="meta-action-btn tts-action-btn" title="播放语音" onclick="if(window.LokiTTS&&window.LokiTTS.handleSpeakerClick){window.LokiTTS.handleSpeakerClick(event,this);}else{alert('TTS 模块尚未加载，请刷新页面');}return false;"><i class="fas fa-volume-up"></i></button>`;
+        actionsHTML += `<button type="button" class="meta-action-btn tts-action-btn" title="播放语音"><i class="fas fa-volume-up"></i><span aria-hidden="true" style="width:4px;height:4px;border-radius:50%;background:#39c77a;margin-left:2px;display:inline-block;"></span></button>`;
     }
     // 不显示头像时，对方消息添加 @ 按钮
     if (msg.sender !== 'user' && !settings.inChatAvatarEnabled) {
@@ -1896,6 +1896,50 @@ function createMessageFragment(msg, prevMsg, nextMsg, lastSenderRef) {
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'message-meta-actions';
     actionsDiv.innerHTML = actionsHTML;
+    const directTtsButton = actionsDiv.querySelector('.tts-action-btn');
+    if (directTtsButton) {
+        const startTtsFromButton = function(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+            }
+            const now = Date.now();
+            if (directTtsButton._ttsLastTrigger && now - directTtsButton._ttsLastTrigger < 900) return false;
+            if (directTtsButton.disabled || directTtsButton.classList.contains('tts-busy')) return false;
+            directTtsButton._ttsLastTrigger = now;
+            directTtsButton.disabled = true;
+            directTtsButton.classList.add('tts-busy');
+            directTtsButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            let inlineStatus = contentWrapper.querySelector('.tts-inline-status');
+            if (!inlineStatus) {
+                inlineStatus = document.createElement('div');
+                inlineStatus.className = 'tts-inline-status';
+                contentWrapper.appendChild(inlineStatus);
+            }
+            inlineStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 正在响应，请稍候…';
+
+            if (window.LokiTTS && typeof window.LokiTTS.convertMessage === 'function') {
+                Promise.resolve(window.LokiTTS.convertMessage(String(msg.id))).catch(function(err) {
+                    console.error('[TTS] 消息按钮直接调用失败:', err);
+                });
+            } else {
+                inlineStatus.textContent = 'TTS 模块没有加载，请刷新页面';
+                directTtsButton.disabled = false;
+                directTtsButton.classList.remove('tts-busy');
+                directTtsButton.innerHTML = '<i class="fas fa-volume-up"></i>';
+                alert('TTS 模块没有加载，请刷新页面');
+            }
+            return false;
+        };
+        if (window.PointerEvent) {
+            directTtsButton.addEventListener('pointerdown', startTtsFromButton, { passive: false });
+        } else {
+            directTtsButton.addEventListener('touchstart', startTtsFromButton, { passive: false });
+        }
+        directTtsButton.addEventListener('click', startTtsFromButton);
+    }
 
     let metaHTML = '';
     if (showTimestamp) {
@@ -2301,7 +2345,7 @@ const addMessage = (message) => {
                     window.SparkApp.recordChat();
                 }
 
-if (!isBatchMode && type === 'normal') {
+if (!isBatchMode && ['normal', 'gift', 'pay-request'].includes(type)) {
     const delayRange = settings.replyDelayMax - settings.replyDelayMin;
     const randomDelay = settings.replyDelayMin + Math.random() * delayRange;
 
