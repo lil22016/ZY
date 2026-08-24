@@ -511,6 +511,8 @@
             body.tts-manual-disabled .tts-action-btn{display:none!important;}
             .tts-action-btn.tts-busy{pointer-events:none;opacity:.45;}
             .tts-inline-status{margin-top:6px;padding:5px 8px;border-radius:8px;background:rgba(var(--accent-color-rgb),.10);color:var(--text-secondary);font-size:11px;line-height:1.35;white-space:nowrap;}
+            /* 语音“转文字”的结果属于辅助信息，始终跟随时间轴使用次要文字颜色。 */
+            .voice-transcript{color:var(--text-secondary)!important;}
         `;
         document.head.appendChild(style);
     }

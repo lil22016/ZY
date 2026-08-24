@@ -114,7 +114,7 @@
         taCart: [],
         taWishlist: [],
         taPayRequests: [],
-        taShopMeta: { lastActionAt: 0 },
+        taShopMeta: { lastActionAt: 0, dayKey: '', actionsToday: 0, dailyTarget: 1, nextActionAt: 0 },
         currentNav: 'shop',
         currentTab: 'recommend',
         currentProduct: null,
@@ -230,7 +230,9 @@
             const idbTaPayRequests = await idbGet('products', 'taPayRequests');
             state.taPayRequests = (idbTaPayRequests && Array.isArray(idbTaPayRequests)) ? idbTaPayRequests : [];
             const idbTaShopMeta = await idbGet('products', 'taShopMeta');
-            state.taShopMeta = (idbTaShopMeta && typeof idbTaShopMeta === 'object') ? idbTaShopMeta : { lastActionAt: 0 };
+            state.taShopMeta = (idbTaShopMeta && typeof idbTaShopMeta === 'object')
+                ? idbTaShopMeta
+                : { lastActionAt: 0, dayKey: '', actionsToday: 0, dailyTarget: 1, nextActionAt: 0 };
             // 小数据从 localStorage 读取
             state.balance = parseFloat(localStorage.getItem(STORAGE_KEYS.balance) || '520');
             state.searchHistory = JSON.parse(localStorage.getItem(STORAGE_KEYS.searchHistory) || '[]');
@@ -277,7 +279,7 @@
         await idbSet('products', 'taCart', state.taCart || []);
         await idbSet('products', 'taWishlist', state.taWishlist || []);
         await idbSet('products', 'taPayRequests', state.taPayRequests || []);
-        await idbSet('products', 'taShopMeta', state.taShopMeta || { lastActionAt: 0 });
+        await idbSet('products', 'taShopMeta', state.taShopMeta || { lastActionAt: 0, dayKey: '', actionsToday: 0, dailyTarget: 1, nextActionAt: 0 });
         // 小数据存 localStorage（礼物柜同时存 localStorage 供 TA 的手机读取）
         localStorage.setItem(STORAGE_KEYS.balance, state.balance.toString());
         localStorage.setItem(STORAGE_KEYS.searchHistory, JSON.stringify(state.searchHistory));
@@ -1503,7 +1505,10 @@
         if (!candidates.length) return;
         const product = candidates[Math.floor(Math.random() * candidates.length)];
         const roll = Math.random();
-        state.taShopMeta = { lastActionAt: Date.now(), lastProductId: product.id };
+        state.taShopMeta = Object.assign({}, state.taShopMeta || {}, {
+            lastActionAt: Date.now(),
+            lastProductId: product.id
+        });
 
         if (roll < 0.28) {
             if (!(state.taCart || []).some(x => x.productId === product.id)) {
@@ -1531,14 +1536,90 @@
         }
     }
 
+    function getTaShopDayKey(timestamp) {
+        const d = new Date(timestamp || Date.now());
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    function randomTomorrowTime(now) {
+        const d = new Date(now);
+        d.setHours(24, 0, 0, 0);
+        // 明天 09:00～21:00 之间随机安排第一次逛商城。
+        return d.getTime() + (9 * 60 + Math.floor(Math.random() * 12 * 60)) * 60000;
+    }
+
+    function prepareTaDailyShopPlan(now) {
+        const today = getTaShopDayKey(now);
+        const oldMeta = state.taShopMeta || {};
+        if (oldMeta.dayKey !== today) {
+            const missedScheduledVisit = Number(oldMeta.nextActionAt || 0) > 0 && Number(oldMeta.nextActionAt) <= now;
+            state.taShopMeta = {
+                lastActionAt: Number(oldMeta.lastActionAt || 0),
+                lastProductId: oldMeta.lastProductId || '',
+                dayKey: today,
+                actionsToday: 0,
+                dailyTarget: Math.random() < 0.5 ? 1 : 2,
+                // 若昨天安排的时间已经错过，重开后补触发；否则在 1～4 小时内随机安排。
+                nextActionAt: missedScheduledVisit
+                    ? now
+                    : now + (1 * 60 + Math.floor(Math.random() * 3 * 60)) * 60000
+            };
+        } else {
+            oldMeta.actionsToday = Math.max(0, Number(oldMeta.actionsToday || 0));
+            oldMeta.dailyTarget = oldMeta.dailyTarget === 2 ? 2 : 1;
+            if (!Number(oldMeta.nextActionAt)) {
+                oldMeta.nextActionAt = now + (1 * 60 + Math.floor(Math.random() * 3 * 60)) * 60000;
+            }
+            state.taShopMeta = oldMeta;
+        }
+        if (state.taShopMeta.actionsToday >= state.taShopMeta.dailyTarget && state.taShopMeta.nextActionAt <= now) {
+            state.taShopMeta.nextActionAt = randomTomorrowTime(now);
+        }
+        return state.taShopMeta;
+    }
+
+    function recordTaShopAction(now) {
+        const meta = prepareTaDailyShopPlan(now);
+        meta.actionsToday += 1;
+        meta.lastActionAt = now;
+        if (meta.actionsToday < meta.dailyTarget) {
+            // 同一天若安排第二次，至少间隔 6 小时，最多约 10 小时。
+            const proposed = now + (6 * 60 + Math.floor(Math.random() * 4 * 60)) * 60000;
+            const midnight = new Date(now);
+            midnight.setHours(24, 0, 0, 0);
+            meta.nextActionAt = proposed < midnight.getTime() - 15 * 60000
+                ? proposed
+                : randomTomorrowTime(now);
+        } else {
+            meta.nextActionAt = randomTomorrowTime(now);
+        }
+    }
+
     let taShopTimer = null;
-    function startTaShopTimer(initial) {
+    function startTaShopTimer() {
         if (taShopTimer) return;
-        const delay = initial ? (45000 + Math.random() * 75000) : (3 * 60000 + Math.random() * 7 * 60000);
+        const now = Date.now();
+        const meta = prepareTaDailyShopPlan(now);
+        // 到期后重新打开网页时稍等 15～45 秒再执行，避免一打开就突然购物。
+        const overdueDelay = 15000 + Math.random() * 30000;
+        const delay = Math.max(overdueDelay, Number(meta.nextActionAt || now) - now);
+        saveData().catch(e => console.warn('[Shop] 保存 TA 每日购物计划失败:', e));
         taShopTimer = setTimeout(async () => {
             taShopTimer = null;
-            try { await tryTaShopAction(); } catch (e) { console.error('[Shop] TA autonomous action failed:', e); }
-            startTaShopTimer(false);
+            const actionNow = Date.now();
+            const currentMeta = prepareTaDailyShopPlan(actionNow);
+            if (currentMeta.actionsToday < currentMeta.dailyTarget && actionNow >= currentMeta.nextActionAt) {
+                try {
+                    await tryTaShopAction();
+                    recordTaShopAction(actionNow);
+                    await saveData();
+                } catch (e) {
+                    console.error('[Shop] TA autonomous action failed:', e);
+                    currentMeta.nextActionAt = actionNow + 60 * 60000;
+                    await saveData().catch(() => {});
+                }
+            }
+            startTaShopTimer();
         }, delay);
     }
 
@@ -1954,8 +2035,8 @@
 
         // 启动自动购物车购买定时器（整个会话期间随机触发，30%概率）
         startAutoBuyTimer();
-        // TA 也会独立逛商城：首次约 45~120 秒，之后每 3~10 分钟一次。
-        startTaShopTimer(true);
+        // TA 每个自然日随机逛商城 1～2 次，计划和当天次数都会持久保存。
+        startTaShopTimer();
     }
 
     // ========== 暴露到全局 ==========
