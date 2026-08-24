@@ -1784,17 +1784,28 @@ function createMessageFragment(msg, prevMsg, nextMsg, lastSenderRef) {
     if (isVoice) {
         const voiceBubble = messageDiv.querySelector('.voice-message-bubble');
         if (voiceBubble) {
-            const voiceUrl = voiceBubble.dataset.voiceUrl;
+            let voiceUrl = voiceBubble.dataset.voiceUrl;
             const voiceText = voiceBubble.dataset.voiceText;
             let voiceAudio = null;
             let voicePlaying = false;
             const voiceIcon = voiceBubble.querySelector('.voice-icon i');
 
             // 点击气泡播放/暂停
-            voiceBubble.addEventListener('click', function(e) {
+            voiceBubble.addEventListener('click', async function(e) {
                 if (e.target.closest('.voice-trans-btn')) return;
                 e.stopPropagation();
-                if (!voiceUrl) return;
+                if (!voiceUrl && window.LokiTTS && typeof window.LokiTTS.resolveMessageAudio === 'function') {
+                    try {
+                        voiceUrl = await window.LokiTTS.resolveMessageAudio(msg);
+                        if (voiceUrl) voiceBubble.dataset.voiceUrl = voiceUrl;
+                    } catch (err) {
+                        console.error('读取 TTS 语音缓存失败:', err);
+                    }
+                }
+                if (!voiceUrl) {
+                    if (typeof showNotification === 'function') showNotification('找不到这条语音的音频缓存', 'warning', 2500);
+                    return;
+                }
                 // 停止其他正在播放的语音
                 if (window._currentPlayingVoice && window._currentPlayingVoice !== voiceBubble) {
                     const prev = window._currentPlayingVoice;
@@ -1806,6 +1817,9 @@ function createMessageFragment(msg, prevMsg, nextMsg, lastSenderRef) {
                 }
                 if (!voiceAudio) {
                     voiceAudio = new Audio(voiceUrl);
+                    if (window.LokiTTS && typeof window.LokiTTS.getPlaybackVolume === 'function') {
+                        voiceAudio.volume = window.LokiTTS.getPlaybackVolume();
+                    }
                     voiceBubble._voiceAudio = voiceAudio;
                     voiceBubble._voicePlaying = false;
                     voiceAudio.addEventListener('loadedmetadata', () => {
@@ -1862,6 +1876,9 @@ function createMessageFragment(msg, prevMsg, nextMsg, lastSenderRef) {
 
     let actionsHTML = '';
     if (settings.replyEnabled) actionsHTML += `<button class="meta-action-btn reply-btn" title="回复"><i class="fas fa-reply"></i></button>`;
+    if (!isVoice && msg.type === 'normal' && msg.text) {
+        actionsHTML += `<button class="meta-action-btn tts-action-btn" title="转换成语音"><i class="fas fa-volume-up"></i></button>`;
+    }
     // 不显示头像时，对方消息添加 @ 按钮
     if (msg.sender !== 'user' && !settings.inChatAvatarEnabled) {
         actionsHTML += `<button class="meta-action-btn mention-btn" title="@对方"><i class="fas fa-at"></i></button>`;
@@ -2639,7 +2656,7 @@ if (partnerPersonas && partnerPersonas.length > 0 && Math.random() < 0.3) {
                         }
                     }
 
-                    addMessage({
+                    const partnerMessage = {
                         id: Date.now() + i,
                         sender: settings.partnerName || '对方',
                         text: finalText,
@@ -2651,11 +2668,28 @@ if (partnerPersonas && partnerPersonas.length > 0 && Math.random() < 0.3) {
                             ? (function(){ const m = recentUserMsgs[Math.floor(Math.random() * recentUserMsgs.length)]; return { id: m.id, text: m.text, sender: m.sender }; })()
                             : null,
                         type: 'normal'
-                    });
-                    if (typeof window._sendPartnerNotification === 'function') {
-                        window._sendPartnerNotification(settings.partnerName || '对方', finalText);
+                    };
+                    const deliverPartnerMessage = function(messageToSend) {
+                        addMessage(messageToSend);
+                        if (typeof window._sendPartnerNotification === 'function') {
+                            window._sendPartnerNotification(
+                                settings.partnerName || '对方',
+                                messageToSend.type === 'voice' ? '[语音]' : finalText
+                            );
+                        }
+                        playSound('message');
+                    };
+
+                    if (window.LokiTTS && window.LokiTTS.shouldAutoVoice()) {
+                        window.LokiTTS.createVoiceMessage(finalText, partnerMessage)
+                            .then(deliverPartnerMessage)
+                            .catch(function(error) {
+                                console.warn('[TTS] 随机语音生成失败，已回退为文字:', error);
+                                deliverPartnerMessage(partnerMessage);
+                            });
+                    } else {
+                        deliverPartnerMessage(partnerMessage);
                     }
-                    playSound('message');
 
                     if (shouldSendSticker) {
                         const randomSticker = enabledStickerPool[Math.floor(Math.random() * enabledStickerPool.length)];
@@ -2708,49 +2742,6 @@ if (partnerPersonas && partnerPersonas.length > 0 && Math.random() < 0.3) {
                             });
                             playSound('message');
                         }, 350 + Math.random() * 400);
-                    }
-
-                    // 语音回复逻辑：约 15% 概率发送语音
-                    const voicePool = (typeof customVoices !== 'undefined' && Array.isArray(customVoices)) ? customVoices : [];
-                    const shouldSendVoice = voicePool.length > 0 && Math.random() < 0.15;
-                    if (shouldSendVoice) {
-                        const randomVoice = voicePool[Math.floor(Math.random() * voicePool.length)];
-                        setTimeout(() => {
-                            const voiceMsg = {
-                                id: Date.now() + i + 3000,
-                                sender: settings.partnerName || '对方',
-                                text: '',
-                                timestamp: new Date(),
-                                type: 'voice',
-                                voiceUrl: randomVoice.audioUrl,
-                                voiceText: randomVoice.text,
-                                voiceDuration: 0,
-                                status: 'received',
-                                favorited: false,
-                                note: null,
-                                replyTo: null
-                            };
-                            if (randomVoice.audioUrl) {
-                                try {
-                                    const tmpA = new Audio(randomVoice.audioUrl);
-                                    tmpA.addEventListener('loadedmetadata', () => {
-                                        voiceMsg.voiceDuration = Math.round(tmpA.duration) || 0;
-                                        addMessage(voiceMsg);
-                                        playSound('message');
-                                    });
-                                    tmpA.addEventListener('canplaythrough', () => {
-                                        voiceMsg.voiceDuration = Math.round(tmpA.duration) || 0;
-                                        addMessage(voiceMsg);
-                                        playSound('message');
-                                    });
-                                    tmpA.addEventListener('error', () => { addMessage(voiceMsg); playSound('message'); });
-                                    setTimeout(() => { addMessage(voiceMsg); playSound('message'); }, 2000);
-                                } catch(e) { addMessage(voiceMsg); playSound('message'); }
-                            } else {
-                                addMessage(voiceMsg);
-                                playSound('message');
-                            }
-                        }, 500 + Math.random() * 800);
                     }
 
                     if (i === replyCount - 1) {
@@ -3358,6 +3349,3 @@ document.addEventListener('DOMContentLoaded', function() {
         observer.observe(historyLoader);
     }
 });
-
-
-

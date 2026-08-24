@@ -504,6 +504,8 @@
         var lsData = {};
         for (var j = 0; j < localStorage.length; j++) {
             var lk = localStorage.key(j);
+            // TTS 设置中可能含有 API Key。密钥只留在当前浏览器，绝不写入导出的备份文件。
+            if (lk === 'ZY_TTS_SETTINGS_V1') continue;
             if (!lk || shouldSkipKeyGroupChat(lk, flags)) continue;
             try {
                 lsData[lk] = localStorage.getItem(lk);

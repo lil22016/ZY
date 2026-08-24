@@ -340,11 +340,6 @@ if (exportAllBtn) {
                             <span>萌宠屋 / 像素宠物</span>
                         </label>
                         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border:1px solid var(--border-color);border-radius:12px;background:var(--primary-bg);font-size:13px;color:var(--text-primary);">
-                            <input type="checkbox" id="_bk_diary" checked style="accent-color:var(--accent-color);width:15px;height:15px;">
-                            <i class="fas fa-book" style="color:var(--accent-color);width:16px;text-align:center;"></i>
-                            <span>朝夕心记</span>
-                        </label>
-                        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;border:1px solid var(--border-color);border-radius:12px;background:var(--primary-bg);font-size:13px;color:var(--text-primary);">
                             <input type="checkbox" id="_bk_accounting" checked style="accent-color:var(--accent-color);width:15px;height:15px;">
                             <i class="fas fa-calculator" style="color:var(--accent-color);width:16px;text-align:center;"></i>
                             <span>同心记账</span>
@@ -385,13 +380,12 @@ if (exportAllBtn) {
                 const inclMap     = document.getElementById('_bk_map').checked;
                 const inclTaPhone = document.getElementById('_bk_taphone').checked;
                 const inclPet     = document.getElementById('_bk_pet').checked;
-                const inclDiary   = document.getElementById('_bk_diary').checked;
                 const inclAccounting = document.getElementById('_bk_accounting').checked;
                 const inclEnvelope = document.getElementById('_bk_envelope').checked;
 
                 if (!inclMsgs && !inclSet && !inclCustom && !inclAnn && !inclThemes && !inclDg && !inclStickers &&
                     !inclHome && !inclMoyu && !inclShop && !inclMoments && !inclMap && !inclTaPhone && !inclPet &&
-                    !inclDiary && !inclAccounting && !inclEnvelope) {
+                    !inclAccounting && !inclEnvelope) {
                     showNotification('请至少选择一项', 'error');
                     return;
                 }
@@ -414,7 +408,7 @@ if (exportAllBtn) {
                             inclMap: inclMap,
                             inclTaPhone: inclTaPhone,
                             inclPet: inclPet,
-                            inclDiary: inclDiary,
+                            inclDiary: false,
                             inclAccounting: inclAccounting,
                             inclEnvelope: inclEnvelope
                         });

@@ -74,6 +74,15 @@ function initChatActionListeners() {
                 const message = messages.find(m => m.id === messageId);
                 if (!message) return;
 
+                if (target.classList.contains('tts-action-btn')) {
+                    if (!window.LokiTTS || typeof window.LokiTTS.convertMessage !== 'function') {
+                        showNotification('TTS 模块尚未加载', 'error', 2500);
+                        return;
+                    }
+                    window.LokiTTS.convertMessage(messageId);
+                    return;
+                }
+
 if (target.classList.contains('delete-btn')) {
     if (confirm('确定要删除这条消息吗？')) {
         const index = messages.findIndex(m => m.id === messageId);

@@ -138,7 +138,6 @@
         chat: '<i class="fas fa-comment-alt"></i>',
         mailbox: '<i class="fas fa-envelope"></i>',
         moyu: '<i class="fas fa-fish"></i>',
-        diary: '<i class="fas fa-clipboard-list"></i>',
         fortune: '<i class="fas fa-star-and-crescent"></i>',
         mood: '<i class="fas fa-calendar-day"></i>',
         calendar: '<i class="fas fa-calendar-alt"></i>',
@@ -147,7 +146,7 @@
         companion: '<i class="fas fa-hourglass-half"></i>'
     };
 
-    const defaultAppOrder = ['chat', 'mailbox', 'moyu', 'diary', 'fortune', 'mood', 'calendar', 'decide', 'stats', 'companion', 'map'];
+    const defaultAppOrder = ['chat', 'mailbox', 'moyu', 'fortune', 'mood', 'calendar', 'decide', 'stats', 'companion', 'map'];
     let appOrder = [...defaultAppOrder];
     let isEditMode = false;
 
@@ -1170,7 +1169,7 @@
         if (!grid) return;
 
         grid.innerHTML = '';
-        const nameMap = { chat:'聊天', mailbox:'信封', moyu:'摸鱼', diary:'朝夕心记', fortune:'运势', mood:'心晴', calendar:'日历', decide:'抉择', stats:'统计', companion:'Loki陪伴' };
+        const nameMap = { chat:'聊天', mailbox:'信封', moyu:'摸鱼', fortune:'运势', mood:'心晴', calendar:'日历', decide:'抉择', stats:'统计', companion:'Loki陪伴' };
 
         Object.keys(defaultAppIcons).forEach(app => {
             const item = document.createElement('div');
@@ -1529,23 +1528,6 @@
                     if (typeof window.renderMoyuLocations === 'function') window.renderMoyuLocations();
                     if (typeof window.updateMoyuLocationSelect === 'function') window.updateMoyuLocationSelect();
                     if (typeof window.switchMoyuTab === 'function') window.switchMoyuTab('current');
-                }
-            },
-            'diary': () => {
-                const modal = document.getElementById('diary-modal');
-                if (!modal) {
-                    console.error('diary-modal not found');
-                    return;
-                }
-                // 确保弹窗在 body 下
-                if (modal.parentElement !== document.body) {
-                    document.body.appendChild(modal);
-                }
-                // 显示弹窗
-                homeShowModal(modal);
-                // 触发渲染（如果 diary.js 已加载）
-                if (typeof window.openDiaryModal === 'function') {
-                    window.openDiaryModal();
                 }
             },
             'fortune': () => {
@@ -1990,7 +1972,7 @@
         if (savedOrder) {
             try {
                 appOrder = JSON.parse(savedOrder).map(app => app === 'accounting' ? 'companion' : app);
-                appOrder = appOrder.filter((app, index) => app !== 'accounting' && appOrder.indexOf(app) === index);
+                appOrder = appOrder.filter((app, index) => app !== 'accounting' && app !== 'diary' && appOrder.indexOf(app) === index);
                 if (!appOrder.includes('companion')) appOrder.push('companion');
                 reorderAppItems();
                 saveAppOrder();
