@@ -271,6 +271,43 @@
         });
     }
 
+    function setMessageGenerating(messageId, isBusy, label) {
+        const wrapper = document.querySelector(`.message-wrapper[data-id="${messageId}"]`);
+        if (!wrapper) return;
+        const button = wrapper.querySelector('.tts-action-btn');
+        if (button) {
+            button.classList.toggle('tts-busy', isBusy);
+            button.disabled = !!isBusy;
+            button.innerHTML = isBusy
+                ? '<i class="fas fa-spinner fa-spin"></i>'
+                : '<i class="fas fa-volume-up"></i>';
+        }
+        let status = wrapper.querySelector('.tts-inline-status');
+        if (label) {
+            if (!status) {
+                status = document.createElement('div');
+                status.className = 'tts-inline-status';
+                const content = wrapper.querySelector('.message-content-wrapper') || wrapper;
+                content.appendChild(status);
+            }
+            status.innerHTML = `${isBusy ? '<i class="fas fa-spinner fa-spin"></i> ' : ''}${label}`;
+        } else if (status) {
+            status.remove();
+        }
+    }
+
+    async function playManualAudio(message) {
+        const url = message.ttsVoiceUrl || await resolveMessageAudio(message);
+        if (!url) throw new Error('没有找到生成的语音');
+        if (window._lokiTTSManualAudio) {
+            try { window._lokiTTSManualAudio.pause(); } catch (_) {}
+        }
+        const audio = new Audio(url);
+        audio.volume = getPlaybackVolume();
+        window._lokiTTSManualAudio = audio;
+        await audio.play();
+    }
+
     async function convertMessage(messageId) {
         if (!config.manualEnabled) {
             notify('手动转换功能目前处于关闭状态', 'info');
@@ -287,25 +324,46 @@
         if (busyMessages.has(String(messageId))) return;
 
         busyMessages.add(String(messageId));
-        notify('正在生成 Loki 语音…', 'info', 1800);
+        const alreadyGenerated = !!(message.ttsCacheKey || message.ttsVoiceUrl);
+        setMessageGenerating(messageId, true, alreadyGenerated ? '正在准备播放…' : '正在生成语音，请稍候…');
+        notify(alreadyGenerated ? '正在准备播放…' : '正在生成 Loki 语音，请稍候…', 'info', alreadyGenerated ? 1800 : 5000);
         try {
-            const voiceMessage = await createVoiceMessage(message.text, message);
-            Object.keys(message).forEach(function (key) { delete message[key]; });
-            Object.assign(message, voiceMessage);
-            if (typeof throttledSaveData === 'function') throttledSaveData();
-            if (typeof renderMessages === 'function') renderMessages(true);
-            notify('已转换成语音', 'success');
+            if (!message.ttsCacheKey && !message.ttsVoiceUrl) {
+                const voiceMessage = await createVoiceMessage(message.text, { id: message.id });
+                message.ttsCacheKey = voiceMessage.ttsCacheKey || '';
+                message.ttsVoiceUrl = voiceMessage.voiceUrl || '';
+                message.ttsGenerated = true;
+                if (typeof throttledSaveData === 'function') throttledSaveData();
+            }
+            setMessageGenerating(messageId, false, '语音生成完成，正在播放…');
+            try {
+                await playManualAudio(message);
+                notify('语音生成完成', 'success');
+                setTimeout(function () { setMessageGenerating(messageId, false, ''); }, 1800);
+            } catch (playError) {
+                console.warn('[TTS] 自动播放被浏览器阻止:', playError);
+                setMessageGenerating(messageId, false, '语音已生成，请再点一次喇叭播放');
+                notify('语音已生成，请再点一次喇叭播放', 'success', 3500);
+            }
         } catch (error) {
             console.error('[TTS] 手动转换失败:', error);
+            setMessageGenerating(messageId, false, '');
             notify(error.message || '语音生成失败', 'error', 4500);
         } finally {
             busyMessages.delete(String(messageId));
+            const wrapper = document.querySelector(`.message-wrapper[data-id="${messageId}"]`);
+            const button = wrapper && wrapper.querySelector('.tts-action-btn');
+            if (button) {
+                button.classList.remove('tts-busy');
+                button.disabled = false;
+                button.innerHTML = '<i class="fas fa-volume-up"></i>';
+            }
         }
     }
 
     async function resolveMessageAudio(message) {
         if (!message) return '';
-        if (message.voiceUrl) return message.voiceUrl;
+        if (message.voiceUrl || message.ttsVoiceUrl) return message.voiceUrl || message.ttsVoiceUrl;
         if (!message.ttsCacheKey || typeof localforage === 'undefined') return '';
         if (objectUrls.has(message.ttsCacheKey)) return objectUrls.get(message.ttsCacheKey);
         const blob = await localforage.getItem(message.ttsCacheKey);
@@ -452,6 +510,7 @@
             .message-content-wrapper.tts-actions-open .message-meta-actions{opacity:1;transform:translateY(0);pointer-events:auto;}
             body.tts-manual-disabled .tts-action-btn{display:none!important;}
             .tts-action-btn.tts-busy{pointer-events:none;opacity:.45;}
+            .tts-inline-status{margin-top:6px;padding:5px 8px;border-radius:8px;background:rgba(var(--accent-color-rgb),.10);color:var(--text-secondary);font-size:11px;line-height:1.35;white-space:nowrap;}
             @media (hover:none){.message-meta-actions{pointer-events:none}.message-content-wrapper.tts-actions-open .message-meta-actions{pointer-events:auto}}
         `;
         document.head.appendChild(style);
