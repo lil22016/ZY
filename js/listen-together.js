@@ -1,221 +1,82 @@
 (function () {
-    'use strict';
-
-    const PLAYLIST_ID = 'PLC9EYW4lXtkI';
-    const STORAGE_KEY = 'ZY_LISTEN_TOGETHER_V1';
-    const INVITE_COOLDOWN = 24 * 60 * 60 * 1000;
-    let player = null;
-    let playerReady = false;
-    let progressTimer = null;
-    let actionTimer = null;
-    let currentVideoId = '';
-    let state = loadState();
-
-    const fallbackComments = [
-        'Not a terrible choice. I may even allow it to continue.',
-        'This one has atmosphere. Try not to ruin it by talking over the best part.',
-        'You chose this deliberately, I assume. Good.',
-        'Stay. Listen properly. The rest of the universe can wait.',
-        'I can see why you kept this one.',
-        'Hm. This sounds better with you here.',
-        'Don’t look so pleased. I only said I liked the song.',
-        'I was going to make a cutting remark, but the chorus saved you.',
-        'This one stays.',
-        'A surprisingly elegant choice, darling.'
-    ];
-    const inviteLines = [
-        'Loki wants to listen to music with you.',
-        'Come along. I found something worth hearing—with you, apparently.',
-        'Put down whatever you are doing. One song. Perhaps two.',
-        'I require your company for a listening session. Try not to be late.'
-    ];
-
-    function defaults() {
-        return { lokiFavorites: {}, events: [], lastInviteAt: 0, shuffle: false, openedOnce: false };
-    }
-    function loadState() {
-        try { return Object.assign(defaults(), JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') || {}); }
-        catch (_) { return defaults(); }
-    }
-    function saveState() {
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
-    }
-    function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-    function escapeHtml(value) {
-        const div = document.createElement('div'); div.textContent = String(value == null ? '' : value); return div.innerHTML;
-    }
-    function plainCardPool() {
-        try {
-            if (!Array.isArray(customReplies)) return fallbackComments;
-            const pool = customReplies.map(x => String(x || '').trim()).filter(x => x && x.length <= 150 && !/<[a-z][\s\S]*>/i.test(x) && !/^data:|^https?:/i.test(x));
-            return pool.length ? pool : fallbackComments;
-        } catch (_) { return fallbackComments; }
-    }
-    function addStyles() {
-        if (document.getElementById('listen-together-style')) return;
-        const style = document.createElement('style'); style.id = 'listen-together-style';
-        style.textContent = `
-        .app-icon[data-app="listen-together"]{position:relative;background:linear-gradient(145deg,#161832 0%,#443267 50%,#a14e73 100%)!important;color:#ffe9f1!important;border:1px solid rgba(255,220,239,.28)!important;box-shadow:0 7px 18px rgba(47,28,83,.38),inset 0 1px 0 rgba(255,255,255,.14)!important;overflow:hidden}.app-icon[data-app="listen-together"]:after{content:"";position:absolute;left:-9px;bottom:-13px;width:34px;height:34px;border-radius:50%;background:radial-gradient(circle,rgba(255,124,176,.35),transparent 68%)}.app-icon[data-app="listen-together"] i{position:relative;z-index:1;text-shadow:0 0 11px rgba(255,213,233,.58)}
-        #lt-overlay{position:fixed;inset:0;z-index:10080;display:none;overflow:auto;-webkit-overflow-scrolling:touch;color:#f9f4ff;background:radial-gradient(circle at 50% 8%,#4a2852 0,#191a35 42%,#090a14 100%);font-family:var(--font-family,'Nunito',sans-serif)}#lt-overlay.on{display:block}
-        .lt-shell{width:min(100%,500px);min-height:100%;margin:auto;padding:calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 28px);box-sizing:border-box}.lt-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:15px}.lt-close{width:40px;height:40px;border-radius:50%;border:1px solid #ffffff29;background:#ffffff0d;color:#fff;font-size:18px}.lt-kicker{text-align:center;font-size:10px;letter-spacing:.22em;color:#e7b7d1}.lt-title{text-align:center;font-size:18px;font-weight:800;margin-top:3px}.lt-presence{width:40px;height:40px;border-radius:50%;border:1px solid #ffffff20;display:grid;place-items:center;color:#f3bad4;background:#ffffff0a}
-        .lt-player-card{padding:11px;border:1px solid #ffffff20;border-radius:22px;background:#ffffff0b;box-shadow:0 18px 45px #0005;backdrop-filter:blur(16px)}.lt-video{position:relative;width:100%;aspect-ratio:16/9;border-radius:15px;overflow:hidden;background:#080811}.lt-video iframe{width:100%!important;height:100%!important}.lt-now{padding:13px 4px 4px}.lt-song{font-size:15px;font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lt-artist{font-size:11px;color:#ffffff91;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .lt-progress{height:4px;border-radius:4px;background:#ffffff18;margin-top:12px;overflow:hidden}.lt-progress-fill{height:100%;width:0;background:linear-gradient(90deg,#c77aa7,#f3c9a7);transition:width .35s linear}.lt-time{display:flex;justify-content:space-between;font-size:9px;color:#ffffff72;margin-top:5px}.lt-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin:14px 0 4px}.lt-control{border:0;background:transparent;color:#fff;font-size:19px;width:42px;height:42px;border-radius:50%}.lt-control.main{width:54px;height:54px;background:linear-gradient(145deg,#f1c3d5,#c983aa);color:#261629;font-size:20px;box-shadow:0 8px 24px #a34d7a55}.lt-control.active{color:#ff759d;background:#ffffff0c}.lt-control:disabled{opacity:.38}
-        .lt-loki-card{margin-top:14px;padding:15px;border-radius:18px;border:1px solid #ffffff1c;background:#ffffff0b}.lt-loki-line{font-size:13px;line-height:1.55;color:#f8edf5;min-height:40px}.lt-loki-meta{display:flex;align-items:center;justify-content:space-between;margin-top:10px;font-size:10px;color:#ffffff73}.lt-heart{font-size:22px;color:#ffffff40;transition:.25s}.lt-heart.on{color:#ff587f;text-shadow:0 0 15px #ff547f99;transform:scale(1.08)}
-        .lt-events{margin-top:14px;padding:13px;border-radius:18px;background:#08091475;border:1px solid #ffffff13}.lt-events-title{font-size:10px;letter-spacing:.16em;color:#d7aac1;margin-bottom:7px}.lt-event{font-size:11px;color:#ffffff98;padding:6px 0;border-bottom:1px solid #ffffff0d}.lt-event:last-child{border-bottom:0}.lt-hint{text-align:center;font-size:10px;color:#ffffff65;margin-top:12px;line-height:1.5}
-        `;
-        document.head.appendChild(style);
-    }
-    function inject() {
-        addStyles();
-        if (document.getElementById('lt-overlay')) return;
-        const embedSrc = `https://www.youtube-nocookie.com/embed/videoseries?list=${encodeURIComponent(PLAYLIST_ID)}&enablejsapi=1&playsinline=1&controls=1&rel=0&origin=${encodeURIComponent(location.origin)}`;
-        const overlay = document.createElement('div'); overlay.id = 'lt-overlay';
-        overlay.innerHTML = `<div class="lt-shell"><div class="lt-head"><button class="lt-close" id="lt-close"><i class="fas fa-chevron-left"></i></button><div><div class="lt-kicker">A SHARED FREQUENCY</div><div class="lt-title">Listen Together</div></div><div class="lt-presence"><i class="fas fa-link"></i></div></div><div class="lt-player-card"><div class="lt-video"><iframe id="lt-youtube-player" src="${embedSrc}" frameborder="0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div><div class="lt-now"><div class="lt-song" id="lt-song">Your YouTube Music playlist</div><div class="lt-artist" id="lt-artist">Tap play to begin listening together</div><div class="lt-progress"><div class="lt-progress-fill" id="lt-progress-fill"></div></div><div class="lt-time"><span id="lt-current">0:00</span><span id="lt-duration">0:00</span></div><div class="lt-controls"><button class="lt-control" id="lt-shuffle" title="随机播放"><i class="fas fa-random"></i></button><button class="lt-control" id="lt-prev"><i class="fas fa-step-backward"></i></button><button class="lt-control main" id="lt-play"><i class="fas fa-play"></i></button><button class="lt-control" id="lt-next"><i class="fas fa-step-forward"></i></button><button class="lt-control" id="lt-open-youtube" title="在 YouTube Music 打开"><i class="fas fa-external-link-alt"></i></button></div></div></div><div class="lt-loki-card"><div class="lt-loki-line" id="lt-loki-line">“Whenever you are ready, darling.”</div><div class="lt-loki-meta"><span id="lt-loki-status">Loki is waiting.</span><span class="lt-heart" id="lt-heart">♥</span></div></div><div class="lt-events"><div class="lt-events-title">SESSION</div><div id="lt-event-list"><div class="lt-event">The room is quiet. Press play when you are ready.</div></div></div><div class="lt-hint">Privacy-enhanced, sign-in-free embed mode is active. The playlist must be Public or Unlisted. If YouTube still requests sign-in, open the playlist in Safari to verify it is playable without an account.</div></div>`;
-        document.body.appendChild(overlay);
-        document.getElementById('lt-close').onclick = close;
-        document.getElementById('lt-play').onclick = togglePlay;
-        document.getElementById('lt-prev').onclick = () => playerReady && player.previousVideo();
-        document.getElementById('lt-next').onclick = () => { if (playerReady) { addEvent('You skipped to the next song.'); player.nextVideo(); } };
-        document.getElementById('lt-shuffle').onclick = toggleShuffle;
-        document.getElementById('lt-open-youtube').onclick = () => window.open(`https://music.youtube.com/playlist?list=${PLAYLIST_ID}`, '_blank');
-    }
-    function loadYouTubeApi() {
-        return new Promise(resolve => {
-            if (window.YT && window.YT.Player) { resolve(); return; }
-            window.__ltYouTubeWaiters = window.__ltYouTubeWaiters || [];
-            window.__ltYouTubeWaiters.push(resolve);
-            if (document.getElementById('youtube-iframe-api')) return;
-            const previous = window.onYouTubeIframeAPIReady;
-            window.onYouTubeIframeAPIReady = function () {
-                if (typeof previous === 'function') { try { previous(); } catch (_) {} }
-                const waiters = window.__ltYouTubeWaiters.splice(0); waiters.forEach(fn => fn());
-            };
-            const script = document.createElement('script'); script.id = 'youtube-iframe-api'; script.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(script);
-        });
-    }
-    async function ensurePlayer() {
-        if (player) return;
-        await loadYouTubeApi();
-        player = new YT.Player('lt-youtube-player', {
-            events: {
-                onReady: event => {
-                    playerReady = true;
-                    event.target.setLoop(true);
-                    if (state.shuffle) event.target.setShuffle(true);
-                    updateButtons(); updateTrackInfo();
-                },
-                onStateChange: onPlayerState,
-                onError: event => {
-                    const code = event && event.data;
-                    setLokiLine('YouTube refused this embedded track. Check that the playlist is Public or Unlisted, then try again.', `Playback error${code ? ' · ' + code : ''}`);
-                    addEvent(`YouTube playback error${code ? ' (' + code + ')' : ''}.`);
-                }
-            }
-        });
-    }
-    function open() {
-        inject(); document.getElementById('lt-overlay').classList.add('on');
-        state.openedOnce = true; saveState(); renderEvents(); ensurePlayer(); startProgress();
-    }
-    function close() {
-        document.getElementById('lt-overlay').classList.remove('on'); stopProgress();
-    }
-    function togglePlay() {
-        if (!playerReady) { setLokiLine('Patience. The playlist is still arriving.', 'Loading YouTube Music…'); return; }
-        const status = player.getPlayerState();
-        if (status === YT.PlayerState.PLAYING) player.pauseVideo();
-        else if (status === YT.PlayerState.CUED || status === YT.PlayerState.UNSTARTED) player.loadPlaylist({ listType: 'playlist', list: PLAYLIST_ID, index: Math.max(0, player.getPlaylistIndex() || 0), startSeconds: 0 });
-        else player.playVideo();
-    }
-    function toggleShuffle() {
-        state.shuffle = !state.shuffle; saveState();
-        if (playerReady) player.setShuffle(state.shuffle);
-        updateButtons(); addEvent(state.shuffle ? 'The playlist was shuffled.' : 'The original playlist order was restored.');
-    }
-    function onPlayerState(event) {
-        updateButtons();
-        if (event.data === YT.PlayerState.PLAYING) {
-            updateTrackInfo(); startProgress();
-            const data = player.getVideoData ? player.getVideoData() : {};
-            const videoId = data.video_id || '';
-            if (videoId && videoId !== currentVideoId) {
-                currentVideoId = videoId; addEvent(`Now playing: ${data.title || 'a new song'}`); scheduleLokiAction(videoId);
-            }
-            setLokiLine(pick(plainCardPool()), 'Loki is listening with you.');
-        } else if (event.data === YT.PlayerState.PAUSED) {
-            setLokiLine('Paused? Very well. I shall wait.', 'Loki is waiting.');
-        } else if (event.data === YT.PlayerState.ENDED) {
-            setLokiLine('That one is over. Let us see what comes next.', 'Choosing the next song…');
-        }
-    }
-    function scheduleLokiAction(videoId) {
-        clearTimeout(actionTimer);
-        actionTimer = setTimeout(() => {
-            if (!playerReady || currentVideoId !== videoId || player.getPlayerState() !== YT.PlayerState.PLAYING) return;
-            const roll = Math.random();
-            if (roll < 0.05) {
-                setLokiLine('No. Not this one.', 'Loki skipped the song.'); addEvent('Loki skipped this song.'); player.nextVideo();
-            } else if (roll < 0.35) {
-                state.lokiFavorites[videoId] = true; saveState(); updateHeart();
-                setLokiLine('This one stays.', 'Loki added this song to his favorites.'); addEvent('Loki liked this song ♥');
-            } else if (roll < 0.78) {
-                const line = pick(plainCardPool()); setLokiLine(line, 'Loki commented on the song.'); addEvent(`Loki: ${line}`);
-            }
-        }, 22000 + Math.random() * 38000);
-    }
-    function updateTrackInfo() {
-        if (!playerReady || !player.getVideoData) return;
-        const data = player.getVideoData() || {};
-        const song = document.getElementById('lt-song'); const artist = document.getElementById('lt-artist');
-        if (song) song.textContent = data.title || 'Your YouTube Music playlist';
-        if (artist) artist.textContent = data.author || 'Listening together';
-        updateHeart();
-    }
-    function updateHeart() {
-        const heart = document.getElementById('lt-heart'); if (!heart) return;
-        const data = playerReady && player.getVideoData ? player.getVideoData() : {};
-        heart.classList.toggle('on', !!state.lokiFavorites[data.video_id || currentVideoId]);
-    }
-    function updateButtons() {
-        const play = document.getElementById('lt-play'); const shuffle = document.getElementById('lt-shuffle');
-        if (play) play.innerHTML = playerReady && player.getPlayerState() === 1 ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
-        if (shuffle) shuffle.classList.toggle('active', !!state.shuffle);
-    }
-    function formatTime(seconds) {
-        seconds = Math.max(0, Math.floor(Number(seconds) || 0)); return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
-    }
-    function startProgress() {
-        stopProgress(); progressTimer = setInterval(() => {
-            if (!playerReady) return;
-            const current = player.getCurrentTime() || 0; const duration = player.getDuration() || 0;
-            const fill = document.getElementById('lt-progress-fill'); if (fill) fill.style.width = duration ? `${Math.min(100, current / duration * 100)}%` : '0%';
-            const a = document.getElementById('lt-current'); const b = document.getElementById('lt-duration'); if (a) a.textContent = formatTime(current); if (b) b.textContent = formatTime(duration);
-        }, 700);
-    }
-    function stopProgress() { if (progressTimer) clearInterval(progressTimer); progressTimer = null; }
-    function setLokiLine(text, status) {
-        const line = document.getElementById('lt-loki-line'); const meta = document.getElementById('lt-loki-status');
-        if (line) line.textContent = `“${String(text || '')}”`; if (meta) meta.textContent = status || 'Loki is listening.';
-    }
-    function addEvent(text) {
-        state.events.unshift({ text: String(text || ''), at: Date.now() }); state.events = state.events.slice(0, 8); saveState(); renderEvents();
-    }
-    function renderEvents() {
-        const box = document.getElementById('lt-event-list'); if (!box) return;
-        box.innerHTML = state.events.length ? state.events.map(event => `<div class="lt-event">${escapeHtml(event.text)}</div>`).join('') : '<div class="lt-event">The room is quiet. Press play when you are ready.</div>';
-    }
-    function sendInvitation(force) {
-        if (!force && (Date.now() - state.lastInviteAt < INVITE_COOLDOWN || Math.random() > 0.12)) return false;
-        if (typeof addMessage !== 'function') return false;
-        const line = pick(inviteLines);
-        const card = `<div style="width:250px;max-width:100%;padding:11px;border-radius:13px;background:linear-gradient(145deg,#211d3e,#543058);border:1px solid rgba(255,225,240,.24);color:#fff;"><div style="font-size:11px;opacity:.68;letter-spacing:.1em;">LISTEN TOGETHER</div><div style="font-size:13px;line-height:1.5;margin:7px 0 10px;">${escapeHtml(line)}</div><button onclick="window.ListenTogetherApp.open()" style="width:100%;border:0;border-radius:9px;padding:8px;background:#e9b6cf;color:#2a1830;font-weight:700;">Join Loki</button></div>`;
-        addMessage({ id: 'listen_invite_' + Date.now(), sender: 'ta', text: card, timestamp: new Date(), status: 'received', type: 'share', favorited: false, note: null });
-        state.lastInviteAt = Date.now(); saveState(); return true;
-    }
-
-    window.ListenTogetherApp = { open, close, sendInvitation: () => sendInvitation(true), playlistId: PLAYLIST_ID };
-    document.addEventListener('DOMContentLoaded', () => {
-        inject(); loadYouTubeApi();
-        setTimeout(() => sendInvitation(false), 45000 + Math.random() * 75000);
-    });
+'use strict';
+const PLAYLIST_ID='PLC9EYW4lXtkI',STORAGE_KEY='ZY_LISTEN_TOGETHER_V1',DB_NAME='ZYListenTogetherDB',STORE='tracks',INVITE_COOLDOWN=86400000;
+let player=null,playerReady=false,progressTimer=null,actionTimer=null,currentVideoId='',currentMode='home',sessionEvents=[],localTracks=[],localObjectUrl='',state=loadState();
+const comments={
+fond:['This one feels different with you beside me.','Keep it playing. I rather like sharing this moment with you.','You and this song are making it difficult for me to remain unimpressed.','I would remember this one, if I were you.'],
+pleased:['Now this is a choice worthy of my attention.','Good. Leave it exactly where it is.','The arrangement is clever. I approve.','This one stays in the collection.'],
+teasing:['You have been waiting for me to approve of this, haven’t you?','Do stop looking so pleased. The song earned the compliment, not you.','Your taste occasionally surprises me in the most inconvenient ways.','I suppose I can tolerate this—perhaps even twice.'],
+thoughtful:['There is something restless underneath this one.','Listen to the space between the notes. That is where it hides.','Interesting. It sounds like a memory that has not happened yet.','This song knows more than it is saying.'],
+dismissive:['No. This one is testing my patience.','I have heard mortal elevator music with greater ambition.','You may defend this choice, but you will not win.','I am giving it one chorus to redeem itself.']};
+const fallback=['Not a terrible choice. I may even allow it to continue.','This one has atmosphere. Try not to ruin it by talking over the best part.','You chose this deliberately, I assume. Good.','Stay. Listen properly. The rest of the universe can wait.','I can see why you kept this one.','Hm. This sounds better with you here.','Don’t look so pleased. I only said I liked the song.','This one stays.'];
+const invites=['Loki wants to listen to music with you.','Come along. I found something worth hearing—with you, apparently.','Put down whatever you are doing. One song. Perhaps two.','I require your company for a listening session. Try not to be late.'];
+function defaults(){return{lokiFavorites:{},localFavorites:{},lastInviteAt:0,shuffle:false,localShuffle:false,localCurrentTrackId:'',openedOnce:false};}
+function loadState(){try{return Object.assign(defaults(),JSON.parse(localStorage.getItem(STORAGE_KEY)||'null')||{});}catch(_){return defaults();}}
+function saveState(){const clean=Object.assign({},state);delete clean.events;try{localStorage.setItem(STORAGE_KEY,JSON.stringify(clean));}catch(_){}}
+function pick(a){return a[Math.floor(Math.random()*a.length)];}
+function esc(v){const d=document.createElement('div');d.textContent=String(v==null?'':v);return d.innerHTML;}
+function cards(){try{if(!Array.isArray(customReplies))return fallback;const a=customReplies.map(x=>String(x||'').trim()).filter(x=>x&&x.length<=150&&!/<[a-z][\s\S]*>/i.test(x)&&!/^data:|^https?:/i.test(x));return a.length?a:fallback;}catch(_){return fallback;}}
+function reaction(mood){const moods=Object.keys(comments),m=mood&&comments[mood]?mood:pick(moods);return{line:pick(comments[m]),mood:m};}
+function time(s){s=Math.max(0,Math.floor(Number(s)||0));return`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;}
+function size(n){return n<1048576?`${Math.max(1,Math.round(n/1024))} KB`:`${(n/1048576).toFixed(1)} MB`;}
+function addStyles(){if(document.getElementById('listen-together-style'))return;const s=document.createElement('style');s.id='listen-together-style';s.textContent=`
+.app-icon[data-app="listen-together"]{position:relative;background:linear-gradient(145deg,#161832,#443267 50%,#a14e73)!important;color:#ffe9f1!important;border:1px solid #ffdcf747!important;box-shadow:0 7px 18px #2f1c5361,inset 0 1px #ffffff24!important;overflow:hidden}.app-icon[data-app="listen-together"]:after{content:"";position:absolute;left:-9px;bottom:-13px;width:34px;height:34px;border-radius:50%;background:radial-gradient(circle,#ff7cb059,transparent 68%)}
+#lt-overlay{position:fixed;inset:0;z-index:10080;display:none;overflow:auto;-webkit-overflow-scrolling:touch;color:#f9f4ff;background:radial-gradient(circle at 50% 8%,#4a2852,#191a35 42%,#090a14);font-family:var(--font-family,'Nunito',sans-serif)}#lt-overlay.on{display:block}.lt-shell{width:min(100%,500px);min-height:100%;margin:auto;padding:calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 28px);box-sizing:border-box}
+.lt-head{display:grid;grid-template-columns:40px 1fr 40px;align-items:center;margin-bottom:15px}.lt-close,.lt-back{width:40px;height:40px;border-radius:50%;border:1px solid #ffffff29;background:#ffffff0d;color:#fff;font-size:18px}.lt-back{display:none}.lt-kicker{text-align:center;font-size:10px;letter-spacing:.22em;color:#e7b7d1}.lt-title{text-align:center;font-size:18px;font-weight:800;margin-top:3px}.lt-presence{width:40px;height:40px;border-radius:50%;border:1px solid #ffffff20;display:grid;place-items:center;color:#f3bad4;background:#ffffff0a}
+.lt-view{display:none}.lt-view.on{display:block}.lt-mode-intro{text-align:center;margin:30px 8px 20px}.lt-mode-intro h2{font-size:23px;margin:0 0 7px}.lt-mode-intro p{font-size:12px;line-height:1.6;color:#ffffff8c;margin:0}.lt-mode-grid{display:grid;gap:15px}.lt-mode-card{position:relative;min-height:168px;padding:22px;border:1px solid #ffffff26;border-radius:25px;color:#fff;text-align:left;box-shadow:0 18px 42px #0004;overflow:hidden}.lt-mode-card:after{content:"";position:absolute;width:130px;height:130px;right:-35px;bottom:-45px;border-radius:50%;background:radial-gradient(circle,#e998bc33,transparent 70%)}.lt-mode-card.local{background:linear-gradient(145deg,#23324eaa,#5b3058aa)}.lt-mode-card.youtube{background:linear-gradient(145deg,#351c31aa,#743342aa)}.lt-mode-icon{width:50px;height:50px;border-radius:17px;display:grid;place-items:center;font-size:22px;background:#ffffff16;border:1px solid #ffffff20;margin-bottom:18px}.lt-mode-name{display:block;font-size:18px;font-weight:800}.lt-mode-desc{display:block;font-size:11px;color:#ffffff93;line-height:1.5;margin-top:6px;max-width:78%}
+.lt-player-card,.lt-panel{padding:11px;border:1px solid #ffffff20;border-radius:22px;background:#ffffff0b;box-shadow:0 18px 45px #0005;backdrop-filter:blur(16px)}.lt-video{width:100%;aspect-ratio:16/9;min-height:210px;border-radius:15px;overflow:hidden;background:#080811}.lt-video iframe{width:100%!important;height:100%!important;min-height:210px}.lt-now{padding:13px 4px 4px}.lt-song{font-size:15px;font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lt-artist{font-size:11px;color:#ffffff91;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lt-progress{height:5px;border-radius:5px;background:#ffffff18;margin-top:12px;overflow:hidden;cursor:pointer}.lt-progress-fill{height:100%;width:0;background:linear-gradient(90deg,#c77aa7,#f3c9a7);transition:width .2s}.lt-time{display:flex;justify-content:space-between;font-size:9px;color:#ffffff72;margin-top:5px}.lt-controls{display:flex;align-items:center;justify-content:center;gap:16px;margin:14px 0 4px}.lt-control{border:0;background:transparent;color:#fff;font-size:19px;width:42px;height:42px;border-radius:50%}.lt-control.main{width:54px;height:54px;background:linear-gradient(145deg,#f1c3d5,#c983aa);color:#261629;font-size:20px;box-shadow:0 8px 24px #a34d7a55}.lt-control.active{color:#ff759d;background:#ffffff0c}
+.lt-import{margin-bottom:14px}.lt-panel-title{font-size:12px;font-weight:800;letter-spacing:.08em;margin:2px 3px 10px}.lt-import-tabs{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px}.lt-import-tab{border:1px solid #ffffff1c;background:#ffffff08;color:#ffffff8c;border-radius:12px;padding:10px 6px;font-size:11px}.lt-import-tab.on{background:#eab5ce1f;border-color:#efb8d455;color:#fff}.lt-import-pane{display:none}.lt-import-pane.on{display:block}.lt-file-picker{display:block;padding:16px;border:1px dashed #efbad35c;border-radius:15px;text-align:center;background:#ffffff06;color:#f3d5e4;font-size:12px}.lt-file-picker input{display:none}.lt-field{width:100%;box-sizing:border-box;border:1px solid #ffffff1c;border-radius:12px;background:#0809148f;color:#fff;padding:11px 12px;margin-top:8px;font-size:12px;outline:none}.lt-field::placeholder{color:#ffffff52}.lt-add-btn{width:100%;border:0;border-radius:12px;background:linear-gradient(135deg,#d495b6,#edc5d6);color:#2a1728;font-weight:800;padding:11px;margin-top:9px}.lt-import-note{font-size:9px;line-height:1.45;color:#ffffff64;margin:9px 3px 0}.lt-import-status{display:none;margin-top:9px;padding:9px 10px;border-radius:11px;background:#ffffff0a;color:#edd4e1;font-size:10px}.lt-import-status.on{display:block}.lt-import-status.error{color:#ffb7bd;background:#7d26343d}
+.lt-local-art{height:178px;border-radius:16px;background:radial-gradient(circle at 50% 40%,#bd789d55,#17162d 52%,#090a14);display:grid;place-items:center;position:relative;overflow:hidden}.lt-disc{width:104px;height:104px;border-radius:50%;background:repeating-radial-gradient(circle,#151521 0 7px,#242239 8px 10px);box-shadow:0 16px 35px #0008;display:grid;place-items:center;animation:lt-spin 9s linear infinite;animation-play-state:paused}.lt-disc.playing{animation-play-state:running}.lt-disc:before{content:"";width:33px;height:33px;border-radius:50%;background:linear-gradient(145deg,#d78cac,#f0cab7);box-shadow:0 0 0 5px #0d0d17}.lt-art-spark{position:absolute;color:#efbdd5aa}.lt-art-spark.a{left:18%;top:22%}.lt-art-spark.b{right:19%;bottom:23%}@keyframes lt-spin{to{transform:rotate(360deg)}}
+.lt-playlist{margin-top:14px}.lt-playlist-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}.lt-count{font-size:10px;color:#ffffff6d}.lt-track-list{max-height:285px;overflow:auto}.lt-empty{padding:24px 12px;text-align:center;color:#ffffff68;font-size:11px;line-height:1.55}.lt-track{display:grid;grid-template-columns:36px minmax(0,1fr) auto;align-items:center;gap:10px;padding:9px 5px;border-bottom:1px solid #ffffff0c}.lt-track.active{background:#e6a8c20e}.lt-track-play{width:34px;height:34px;border-radius:11px;border:0;background:#ffffff0c;color:#eec5d8}.lt-track-name{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lt-track-meta{font-size:9px;color:#ffffff63;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lt-track-remove{border:0;background:transparent;color:#ffffff4c;width:30px;height:30px}.lt-track-fav{color:#ff698e;margin-left:5px}
+.lt-loki-card{margin-top:14px;padding:15px;border-radius:18px;border:1px solid #ffffff1c;background:#ffffff0b}.lt-loki-line{font-size:13px;line-height:1.55;color:#f8edf5;min-height:40px}.lt-loki-meta{display:flex;align-items:center;justify-content:space-between;margin-top:10px;font-size:10px;color:#ffffff73}.lt-heart{font-size:22px;color:#ffffff40;transition:.25s}.lt-heart.on{color:#ff587f;text-shadow:0 0 15px #ff547f99;transform:scale(1.08)}.lt-events{margin-top:14px;padding:13px;border-radius:18px;background:#08091475;border:1px solid #ffffff13}.lt-events-head{display:flex;justify-content:space-between;align-items:center}.lt-events-title{font-size:10px;letter-spacing:.16em;color:#d7aac1}.lt-clear-session{border:0;background:transparent;color:#ffffff65;font-size:9px;padding:5px}.lt-event{font-size:11px;color:#ffffff98;padding:6px 0;border-bottom:1px solid #ffffff0d}.lt-hint{text-align:center;font-size:10px;color:#ffffff65;margin-top:12px;line-height:1.5}`;document.head.appendChild(s);}
+function inject(){addStyles();if(document.getElementById('lt-overlay'))return;const src=`https://www.youtube-nocookie.com/embed/videoseries?list=${PLAYLIST_ID}&enablejsapi=1&playsinline=1&controls=1&rel=0&origin=${encodeURIComponent(location.origin)}`,o=document.createElement('div');o.id='lt-overlay';o.innerHTML=`<div class="lt-shell">
+<div class="lt-head"><button class="lt-close" id="lt-close"><i class="fas fa-times"></i></button><div><div class="lt-kicker">A SHARED FREQUENCY</div><div class="lt-title">Listen Together</div></div><button class="lt-back" id="lt-back"><i class="fas fa-chevron-left"></i></button><div class="lt-presence" id="lt-presence"><i class="fas fa-link"></i></div></div>
+<section class="lt-view on" id="lt-home-view"><div class="lt-mode-intro"><h2>Choose how we listen.</h2><p>Use your YouTube Music playlist, or build a private library from MP3 and M4A audio.</p></div><div class="lt-mode-grid"><button class="lt-mode-card local" id="lt-mode-local"><span class="lt-mode-icon"><i class="fas fa-headphones-alt"></i></span><span class="lt-mode-name">MP3 / M4A</span><span class="lt-mode-desc">Upload audio files or add direct audio links. Your own playlist, inside ZY.</span></button><button class="lt-mode-card youtube" id="lt-mode-youtube"><span class="lt-mode-icon"><i class="fab fa-youtube"></i></span><span class="lt-mode-name">YouTube Music</span><span class="lt-mode-desc">Open the existing shared playlist and YouTube player.</span></button></div></section>
+<section class="lt-view" id="lt-youtube-view"><div class="lt-player-card"><div class="lt-video"><iframe id="lt-youtube-player" src="${src}" frameborder="0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div><div class="lt-now"><div class="lt-song" id="lt-song">Your YouTube Music playlist</div><div class="lt-artist" id="lt-artist">Tap play to begin listening together</div><div class="lt-progress"><div class="lt-progress-fill" id="lt-progress-fill"></div></div><div class="lt-time"><span id="lt-current">0:00</span><span id="lt-duration">0:00</span></div><div class="lt-controls"><button class="lt-control" id="lt-shuffle"><i class="fas fa-random"></i></button><button class="lt-control" id="lt-prev"><i class="fas fa-step-backward"></i></button><button class="lt-control main" id="lt-play"><i class="fas fa-play"></i></button><button class="lt-control" id="lt-next"><i class="fas fa-step-forward"></i></button><button class="lt-control" id="lt-open-youtube"><i class="fas fa-external-link-alt"></i></button></div></div></div><div class="lt-hint">The original YouTube Music mode. If YouTube requests verification, use the MP3 / M4A library instead.</div></section>
+<section class="lt-view" id="lt-local-view"><div class="lt-panel lt-import"><div class="lt-panel-title">ADD MUSIC</div><div class="lt-import-tabs"><button class="lt-import-tab on" data-lt-import="file"><i class="fas fa-file-audio"></i> Upload files</button><button class="lt-import-tab" data-lt-import="url"><i class="fas fa-link"></i> Audio link</button></div><div class="lt-import-pane on" id="lt-import-file"><label class="lt-file-picker"><i class="fas fa-plus"></i> Choose MP3 / M4A files<input id="lt-file-input" type="file" accept="audio/mpeg,audio/mp4,audio/aac,.mp3,.m4a,.aac" multiple></label><div class="lt-import-note">Files are saved in this Web App’s IndexedDB, not localStorage. Large libraries still depend on available iPhone storage.</div></div><div class="lt-import-pane" id="lt-import-url"><input class="lt-field" id="lt-url-title" placeholder="Song title (optional)"><input class="lt-field" id="lt-url-input" type="url" inputmode="url" placeholder="Direct https://…/song.mp3 or .m4a link"><button class="lt-add-btn" id="lt-add-url">Add to playlist</button><div class="lt-import-note">The link must point directly to an audio file. A normal song webpage is not an audio link.</div></div><div class="lt-import-status" id="lt-import-status"></div></div>
+<div class="lt-player-card"><div class="lt-local-art"><span class="lt-art-spark a">✦</span><div class="lt-disc" id="lt-disc"></div><span class="lt-art-spark b">✧</span></div><div class="lt-now"><div class="lt-song" id="lt-local-song">Choose something from your playlist</div><div class="lt-artist" id="lt-local-artist">MP3 / M4A library</div><div class="lt-progress" id="lt-local-progress"><div class="lt-progress-fill" id="lt-local-progress-fill"></div></div><div class="lt-time"><span id="lt-local-current">0:00</span><span id="lt-local-duration">0:00</span></div><div class="lt-controls"><button class="lt-control" id="lt-local-shuffle"><i class="fas fa-random"></i></button><button class="lt-control" id="lt-local-prev"><i class="fas fa-step-backward"></i></button><button class="lt-control main" id="lt-local-play"><i class="fas fa-play"></i></button><button class="lt-control" id="lt-local-next"><i class="fas fa-step-forward"></i></button></div></div><audio id="lt-local-audio" preload="metadata" playsinline></audio></div>
+<div class="lt-panel lt-playlist"><div class="lt-playlist-head"><div class="lt-panel-title" style="margin:0">MY PLAYLIST</div><span class="lt-count" id="lt-track-count">0 songs</span></div><div class="lt-track-list" id="lt-track-list"></div></div></section>
+<div id="lt-companion-zone" style="display:none"><div class="lt-loki-card"><div class="lt-loki-line" id="lt-loki-line">“Whenever you are ready, darling.”</div><div class="lt-loki-meta"><span id="lt-loki-status">Loki is waiting.</span><span class="lt-heart" id="lt-heart">♥</span></div></div><div class="lt-events"><div class="lt-events-head"><div class="lt-events-title">SESSION</div><button class="lt-clear-session" id="lt-clear-session">Clear</button></div><div id="lt-event-list"></div></div></div></div>`;document.body.appendChild(o);bind();}
+function bind(){id('lt-close').onclick=close;id('lt-back').onclick=()=>show('home');id('lt-mode-youtube').onclick=()=>show('youtube');id('lt-mode-local').onclick=()=>show('local');id('lt-play').onclick=toggleYT;id('lt-prev').onclick=()=>playerReady&&player.previousVideo();id('lt-next').onclick=()=>{if(playerReady){eventLog('You skipped to the next song.');player.nextVideo();}};id('lt-shuffle').onclick=shuffleYT;id('lt-open-youtube').onclick=()=>window.open(`https://music.youtube.com/playlist?list=${PLAYLIST_ID}`,'_blank');id('lt-clear-session').onclick=()=>{sessionEvents=[];renderEvents();};document.querySelectorAll('[data-lt-import]').forEach(b=>b.onclick=()=>importTab(b.dataset.ltImport));id('lt-file-input').onchange=importFiles;id('lt-add-url').onclick=importUrl;id('lt-local-play').onclick=toggleLocal;id('lt-local-prev').onclick=()=>adjacent(-1,true);id('lt-local-next').onclick=()=>adjacent(1,true);id('lt-local-shuffle').onclick=shuffleLocal;id('lt-local-progress').onclick=seek;const a=audio();a.addEventListener('play',onLocalPlay);a.addEventListener('pause',updateLocalButtons);a.addEventListener('timeupdate',updateLocalProgress);a.addEventListener('loadedmetadata',updateLocalProgress);a.addEventListener('ended',()=>adjacent(1,false));a.addEventListener('error',localError);}
+function id(x){return document.getElementById(x);}function importTab(n){document.querySelectorAll('[data-lt-import]').forEach(e=>e.classList.toggle('on',e.dataset.ltImport===n));document.querySelectorAll('.lt-import-pane').forEach(e=>e.classList.remove('on'));id(`lt-import-${n}`).classList.add('on');status('');}
+function show(m){currentMode=m;document.querySelectorAll('#lt-overlay .lt-view').forEach(v=>v.classList.remove('on'));id(`lt-${m}-view`).classList.add('on');id('lt-back').style.display=m==='home'?'none':'block';id('lt-presence').style.display=m==='home'?'grid':'none';id('lt-companion-zone').style.display=m==='home'?'none':'block';if(m==='youtube'){if(!audio().paused)audio().pause();ensureYT();startYTProgress();heart();}else if(m==='local'){if(playerReady&&player.getPlayerState()===1)player.pauseVideo();stopYTProgress();loadTracks();localInfo();heart();}else stopYTProgress();}
+function open(){inject();id('lt-overlay').classList.add('on');sessionEvents=[];renderEvents();show('home');state.openedOnce=true;saveState();}function close(){id('lt-overlay').classList.remove('on');stopYTProgress();}
+function loadYTApi(){return new Promise(r=>{if(window.YT&&YT.Player)return r();window.__ltWait=window.__ltWait||[];window.__ltWait.push(r);if(id('youtube-iframe-api'))return;const old=window.onYouTubeIframeAPIReady;window.onYouTubeIframeAPIReady=()=>{if(typeof old==='function')try{old();}catch(_){}window.__ltWait.splice(0).forEach(f=>f());};const s=document.createElement('script');s.id='youtube-iframe-api';s.src='https://www.youtube.com/iframe_api';document.head.appendChild(s);});}
+async function ensureYT(){if(player)return;await loadYTApi();player=new YT.Player('lt-youtube-player',{events:{onReady:e=>{playerReady=true;e.target.setLoop(true);if(state.shuffle)e.target.setShuffle(true);updateYTButtons();trackYT();},onStateChange:stateYT,onError:e=>{say('YouTube refused this embedded track. The MP3 / M4A room is still available.',`Playback error · ${e.data||''}`);eventLog(`YouTube playback error (${e.data||'unknown'}).`);}}});}
+function toggleYT(){if(!playerReady)return say('Patience. The playlist is still arriving.','Loading YouTube Music…');const s=player.getPlayerState();if(s===1)player.pauseVideo();else if(s===5||s===-1)player.loadPlaylist({listType:'playlist',list:PLAYLIST_ID,index:Math.max(0,player.getPlaylistIndex()||0)});else player.playVideo();}
+function shuffleYT(){state.shuffle=!state.shuffle;saveState();if(playerReady)player.setShuffle(state.shuffle);updateYTButtons();eventLog(state.shuffle?'The YouTube playlist was shuffled.':'The original YouTube order was restored.');}
+function stateYT(e){updateYTButtons();if(e.data===1){trackYT();startYTProgress();const d=player.getVideoData()||{},v=d.video_id||'';if(v&&v!==currentVideoId){currentVideoId=v;eventLog(`Now playing: ${d.title||'a new song'}`);scheduleYT(v);}say(pick(cards()),'Loki is listening with you.');}else if(e.data===2)say('Paused? Very well. I shall wait.','Loki is waiting.');else if(e.data===0)say('That one is over. Let us see what comes next.','Choosing the next song…');}
+function scheduleYT(v){clearTimeout(actionTimer);actionTimer=setTimeout(()=>{if(currentMode!=='youtube'||!playerReady||currentVideoId!==v||player.getPlayerState()!==1)return;const r=Math.random();if(r<.05){say('No. Not this one.','Loki skipped the song.');eventLog('Loki skipped this song.');player.nextVideo();}else if(r<.35){state.lokiFavorites[v]=true;saveState();heart();say('This one stays.','Loki added this song to his favorites.');eventLog('Loki liked this song ♥');}else if(r<.78){const l=pick(cards());say(l,'Loki commented on the song.');eventLog(`Loki: ${l}`);}},22000+Math.random()*38000);}
+function trackYT(){if(!playerReady)return;const d=player.getVideoData()||{};id('lt-song').textContent=d.title||'Your YouTube Music playlist';id('lt-artist').textContent=d.author||'Listening together';heart();}function updateYTButtons(){id('lt-play').innerHTML=playerReady&&player.getPlayerState()===1?'<i class="fas fa-pause"></i>':'<i class="fas fa-play"></i>';id('lt-shuffle').classList.toggle('active',!!state.shuffle);}
+function startYTProgress(){stopYTProgress();progressTimer=setInterval(()=>{if(!playerReady||currentMode!=='youtube')return;const c=player.getCurrentTime()||0,d=player.getDuration()||0;id('lt-progress-fill').style.width=d?`${Math.min(100,c/d*100)}%`:'0%';id('lt-current').textContent=time(c);id('lt-duration').textContent=time(d);},700);}function stopYTProgress(){if(progressTimer)clearInterval(progressTimer);progressTimer=null;}
+function openDb(){return new Promise((res,rej)=>{if(!indexedDB)return rej(Error('IndexedDB is unavailable.'));const q=indexedDB.open(DB_NAME,1);q.onupgradeneeded=()=>{if(!q.result.objectStoreNames.contains(STORE))q.result.createObjectStore(STORE,{keyPath:'id'});};q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});}
+async function dbAll(){const db=await openDb();return new Promise((res,rej)=>{const q=db.transaction(STORE).objectStore(STORE).getAll();q.onsuccess=()=>{db.close();res(q.result||[]);};q.onerror=()=>{db.close();rej(q.error);};});}
+async function dbPut(t){const db=await openDb();return new Promise((res,rej)=>{const x=db.transaction(STORE,'readwrite');x.objectStore(STORE).put(t);x.oncomplete=()=>{db.close();res();};x.onerror=x.onabort=()=>{const e=x.error;db.close();rej(e);};});}
+async function dbDel(k){const db=await openDb();return new Promise((res,rej)=>{const x=db.transaction(STORE,'readwrite');x.objectStore(STORE).delete(k);x.oncomplete=()=>{db.close();res();};x.onerror=()=>{db.close();rej(x.error);};});}
+async function loadTracks(){try{localTracks=(await dbAll()).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));renderTracks();}catch(e){status(`Music library could not be opened: ${e.message||e}`,true);}}
+function trackId(p){return`${p}_${Date.now()}_${Math.random().toString(36).slice(2,9)}`;}function cleanName(n){return String(n||'Untitled track').replace(/\.(mp3|m4a|aac|mp4)$/i,'').replace(/_+/g,' ').trim()||'Untitled track';}
+async function importFiles(e){const fs=Array.from(e.target.files||[]);if(!fs.length)return;status(`Saving ${fs.length} file${fs.length===1?'':'s'}…`);let n=0;try{for(const f of fs){if(!/\.(mp3|m4a|aac|mp4)$/i.test(f.name)&&!/^audio\/(mpeg|mp4|aac)/i.test(f.type||''))continue;await dbPut({id:trackId('file'),title:cleanName(f.name),sourceType:'file',mimeType:f.type||'',size:f.size||0,blob:f,createdAt:Date.now()+n++});}await loadTracks();status(n?`${n} song${n===1?'':'s'} added to My Playlist.`:'No supported audio files were found.',!n);if(n)eventLog(`${n} local song${n===1?'':'s'} added.`);}catch(err){status(err&&(err.name==='QuotaExceededError'||/quota/i.test(err.message||''))?'This Web App’s iPhone storage allowance is full. Remove some large tracks and try again.':`Import failed: ${err.message||err}`,true);}e.target.value='';}
+async function importUrl(){const u=id('lt-url-input').value.trim();if(!/^https?:\/\//i.test(u))return status('Enter a direct http:// or https:// audio link.',true);let inferred='Linked track';try{inferred=cleanName(decodeURIComponent(new URL(u).pathname.split('/').pop()||inferred));}catch(_){}const t={id:trackId('url'),title:id('lt-url-title').value.trim()||inferred,sourceType:'url',url:u,size:0,createdAt:Date.now()};try{await dbPut(t);await loadTracks();id('lt-url-input').value='';id('lt-url-title').value='';status('Audio link added. Tap it to test playback.');eventLog(`${t.title} was added by link.`);}catch(e){status(`Could not save this link: ${e.message||e}`,true);}}
+function status(m,bad){const e=id('lt-import-status');e.textContent=m||'';e.classList.toggle('on',!!m);e.classList.toggle('error',!!bad);}
+function renderTracks(){const list=id('lt-track-list');id('lt-track-count').textContent=`${localTracks.length} song${localTracks.length===1?'':'s'}`;if(!localTracks.length){list.innerHTML='<div class="lt-empty">Your playlist is empty.<br>Add MP3/M4A files or a direct audio link above.</div>';return;}list.innerHTML=localTracks.map(t=>{const active=state.localCurrentTrackId===t.id,meta=t.sourceType==='file'?`Uploaded file · ${size(t.size)}`:'Direct audio link';return`<div class="lt-track${active?' active':''}"><button class="lt-track-play" data-play="${esc(t.id)}"><i class="fas ${active&&!audio().paused?'fa-pause':'fa-play'}"></i></button><div data-play="${esc(t.id)}"><div class="lt-track-name">${esc(t.title)}${state.localFavorites[t.id]?'<span class="lt-track-fav">♥</span>':''}</div><div class="lt-track-meta">${esc(meta)}</div></div><button class="lt-track-remove" data-remove="${esc(t.id)}"><i class="fas fa-trash-alt"></i></button></div>`;}).join('');list.querySelectorAll('[data-play]').forEach(e=>e.onclick=()=>playLocal(e.dataset.play));list.querySelectorAll('[data-remove]').forEach(e=>e.onclick=x=>{x.stopPropagation();removeTrack(e.dataset.remove);});}
+async function removeTrack(k){const t=localTracks.find(x=>x.id===k);if(!t||!confirm(`Remove “${t.title}” from My Playlist?`))return;try{if(state.localCurrentTrackId===k){audio().pause();audio().removeAttribute('src');audio().load();releaseUrl();state.localCurrentTrackId='';}delete state.localFavorites[k];saveState();await dbDel(k);await loadTracks();localInfo();eventLog(`${t.title} was removed.`);}catch(e){status(`Could not remove this track: ${e.message||e}`,true);}}
+function audio(){return id('lt-local-audio');}function releaseUrl(){if(localObjectUrl)URL.revokeObjectURL(localObjectUrl);localObjectUrl='';}
+async function playLocal(k){const t=localTracks.find(x=>x.id===k);if(!t)return;const a=audio();if(state.localCurrentTrackId===k&&a.src){if(a.paused)try{await a.play();}catch(e){rejected(e);}else a.pause();return;}releaseUrl();state.localCurrentTrackId=k;saveState();if(t.sourceType==='file'){localObjectUrl=URL.createObjectURL(t.blob);a.src=localObjectUrl;}else a.src=t.url;a.load();localInfo();renderTracks();try{await a.play();}catch(e){rejected(e);}}
+function rejected(e){say(e&&e.name==='NotAllowedError'?'Tap play once more—iPhone is waiting for a direct playback gesture.':'This audio could not be played. Make sure a link points directly to an MP3 or M4A file.','Playback did not start.');eventLog(`Local playback failed${e&&e.name?` (${e.name})`:''}.`);updateLocalButtons();}
+function localError(){if(!state.localCurrentTrackId)return;say('That file refuses to sing. Check the audio format or link.','Audio could not be loaded.');eventLog('The current MP3/M4A track could not be loaded.');}
+function toggleLocal(){const a=audio();if(!state.localCurrentTrackId){if(localTracks.length)playLocal(localTracks[0].id);else say('You have not given me anything to play yet.','The playlist is empty.');}else if(a.paused)a.play().catch(rejected);else a.pause();}
+function adjacent(dir,user){if(!localTracks.length)return;let next;if(state.localShuffle&&localTracks.length>1)next=pick(localTracks.filter(t=>t.id!==state.localCurrentTrackId));else{let i=localTracks.findIndex(t=>t.id===state.localCurrentTrackId);if(i<0)i=dir>0?-1:0;next=localTracks[(i+dir+localTracks.length)%localTracks.length];}if(next){if(user)eventLog(`You chose ${dir>0?'the next':'the previous'} song.`);playLocal(next.id);}}
+function shuffleLocal(){state.localShuffle=!state.localShuffle;saveState();updateLocalButtons();eventLog(state.localShuffle?'The MP3/M4A playlist was shuffled.':'The original MP3/M4A order was restored.');}
+function onLocalPlay(){const t=localTracks.find(x=>x.id===state.localCurrentTrackId);if(!t)return;updateLocalButtons();renderTracks();eventLog(`Now playing: ${t.title}`);const r=reaction();say(r.line,`Loki sounds ${r.mood}.`);scheduleLocal(t.id);}
+function scheduleLocal(k){clearTimeout(actionTimer);actionTimer=setTimeout(()=>{const a=audio();if(currentMode!=='local'||state.localCurrentTrackId!==k||a.paused||a.ended)return;const roll=Math.random();if(roll<.05&&localTracks.length>1){say('No. I have endured enough of this one.','Loki skipped the song.');eventLog('Loki skipped this song.');adjacent(1,false);}else if(roll<.35){state.localFavorites[k]=true;saveState();heart();renderTracks();say('This one stays. Do not remove it.','Loki added this song to his favorites.');eventLog('Loki liked this song ♥');}else if(roll<.82){const r=reaction(roll>.72?'dismissive':'');say(r.line,`Loki sounds ${r.mood}.`);eventLog(`Loki: ${r.line}`);}},22000+Math.random()*38000);}
+function localInfo(){const t=localTracks.find(x=>x.id===state.localCurrentTrackId);id('lt-local-song').textContent=t?t.title:'Choose something from your playlist';id('lt-local-artist').textContent=t?(t.sourceType==='file'?'Uploaded MP3 / M4A':'Direct audio link'):'MP3 / M4A library';updateLocalProgress();updateLocalButtons();heart();}
+function updateLocalButtons(){const a=audio();id('lt-local-play').innerHTML=!a.paused?'<i class="fas fa-pause"></i>':'<i class="fas fa-play"></i>';id('lt-local-shuffle').classList.toggle('active',!!state.localShuffle);id('lt-disc').classList.toggle('playing',!a.paused);}
+function updateLocalProgress(){const a=audio(),c=Number(a.currentTime)||0,d=Number(a.duration)||0;id('lt-local-progress-fill').style.width=d?`${Math.min(100,c/d*100)}%`:'0%';id('lt-local-current').textContent=time(c);id('lt-local-duration').textContent=time(d);}
+function seek(e){const a=audio();if(!Number.isFinite(a.duration)||a.duration<=0)return;const r=e.currentTarget.getBoundingClientRect();a.currentTime=a.duration*Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));}
+function heart(){const h=id('lt-heart');if(!h)return;let liked=false;if(currentMode==='local')liked=!!state.localFavorites[state.localCurrentTrackId];else if(currentMode==='youtube'){const d=playerReady&&player.getVideoData?player.getVideoData():{};liked=!!state.lokiFavorites[d.video_id||currentVideoId];}h.classList.toggle('on',liked);}
+function say(t,s){if(id('lt-loki-line'))id('lt-loki-line').textContent=`“${String(t||'')}”`;if(id('lt-loki-status'))id('lt-loki-status').textContent=s||'Loki is listening.';}
+function eventLog(t){sessionEvents.unshift({text:String(t||'')});sessionEvents=sessionEvents.slice(0,12);renderEvents();}function renderEvents(){const b=id('lt-event-list');if(b)b.innerHTML=sessionEvents.length?sessionEvents.map(e=>`<div class="lt-event">${esc(e.text)}</div>`).join(''):'<div class="lt-event">A new listening session has begun.</div>';}
+function invite(force){if(!force&&(Date.now()-state.lastInviteAt<INVITE_COOLDOWN||Math.random()>.12))return false;if(typeof addMessage!=='function')return false;const line=pick(invites),card=`<div style="width:250px;max-width:100%;padding:11px;border-radius:13px;background:linear-gradient(145deg,#211d3e,#543058);border:1px solid #ffe1f03d;color:#fff"><div style="font-size:11px;opacity:.68;letter-spacing:.1em">LISTEN TOGETHER</div><div style="font-size:13px;line-height:1.5;margin:7px 0 10px">${esc(line)}</div><button onclick="window.ListenTogetherApp.open()" style="width:100%;border:0;border-radius:9px;padding:8px;background:#e9b6cf;color:#2a1830;font-weight:700">Join Loki</button></div>`;addMessage({id:'listen_invite_'+Date.now(),sender:'ta',text:card,timestamp:new Date(),status:'received',type:'share',favorited:false,note:null});state.lastInviteAt=Date.now();saveState();return true;}
+window.ListenTogetherApp={open,close,sendInvitation:()=>invite(true),playlistId:PLAYLIST_ID,reloadLibrary:loadTracks};document.addEventListener('DOMContentLoaded',()=>{inject();setTimeout(()=>invite(false),45000+Math.random()*75000);});
 })();
