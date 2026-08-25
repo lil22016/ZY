@@ -37,6 +37,33 @@
     <link rel="stylesheet" href="css/spark.css">
 
     <style id="css-live-preview-style">
+        /* 自制功能图标：Loki 陪伴（深森林绿 → 浅薄荷绿） */
+        .app-icon[data-app="companion"] {
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(145deg, #06110b 0%, #174c31 52%, #9be7b2 100%) !important;
+            color: #f4fff7 !important;
+            border: 1px solid rgba(190, 255, 211, 0.34) !important;
+            box-shadow: 0 7px 18px rgba(10, 66, 39, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
+        }
+        .app-icon[data-app="companion"]::after {
+            content: "";
+            position: absolute;
+            width: 34px;
+            height: 34px;
+            right: -14px;
+            top: -14px;
+            border-radius: 50%;
+            border: 1px solid rgba(224, 255, 234, 0.34);
+            box-shadow: 0 0 15px rgba(151, 255, 186, 0.24);
+            pointer-events: none;
+        }
+        .app-icon[data-app="companion"] i {
+            position: relative;
+            z-index: 1;
+            text-shadow: 0 0 10px rgba(220, 255, 231, 0.62);
+        }
+
         /* 输入框样式 */
         .input-area {
             display: flex;
@@ -2122,7 +2149,7 @@
                 <button id="session-manager-btn" class="action-btn" title="会话管理"><i class="fas fa-comments"></i></button>
                 <button id="daily-greeting-btn" class="action-btn" title="今日公告" onclick="reopenDailyGreeting()"><i class="fas fa-newspaper"></i></button>
                 <button id="theme-toggle" class="action-btn" title="切换主题"><i class="fas fa-moon"></i></button>
-                <button id="calendar-btn" class="action-btn" title="日历" onclick="openMiniCalendar()"><i class="fas fa-calendar-alt"></i></button>
+                <button id="calendar-btn" class="action-btn" title="月相周期" aria-label="打开月相周期" onclick="window.CycleApp && window.CycleApp.open()"><i class="fas fa-calendar-alt"></i></button>
                 <button id="settings-btn" class="action-btn" title="设置"><i class="fas fa-cog"></i></button>
                 <!-- 火花图标 -->
                 <div class="spark-icon" id="spark-icon" onclick="SparkApp.openSparkModal()" style="display:none;">
@@ -4382,7 +4409,7 @@
     <script src="js/ta-phone.js?v=20260824-shopping2"></script>
     <script src="js/shop.js?v=20260824-giftread1"></script>
     <script src="js/cycle.js?v=20260824-calendar5"></script>
-    <script src="js/listen-together.js?v=20260825-dual-library1"></script>
+    <script src="js/listen-together.js?v=20260825-combined3"></script>
     <script src="js/gift-cabinet.js"></script>
     <script src="js/moments.js"></script>
     <script src="js/spark.js"></script>
