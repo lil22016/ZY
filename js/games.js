@@ -961,8 +961,13 @@ window._runMsgSearch = function() {
     }).join('') + (results.length > 100 ? `<div style="text-align:center;padding:10px;font-size:12px;color:var(--text-secondary);">仅显示前100条，共找到 ${results.length} 条</div>` : '');
 };
 
-let wheelOptions = ["选项 1", "选项 2", "选项 3"];
+let wheelOptions = ["", "", ""];
 let wheelResultText = "";
+
+function getChoiceOptionPlaceholder(index) {
+    const labels = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+    return `选项${labels[index] || index + 1}`;
+}
 
 function initDecisionModule() {
     const entryBtn = document.getElementById('decision-function'); 
@@ -1012,7 +1017,7 @@ function initDecisionModule() {
 
     if (addOptionBtn && !addOptionBtn.dataset.initialized) {
         addOptionBtn.addEventListener('click', () => {
-            wheelOptions.push(`选项 ${wheelOptions.length + 1}`);
+            wheelOptions.push('');
             renderPickerOptions();
             renderPickerCards();
         });
@@ -1041,6 +1046,10 @@ function initDecisionModule() {
 }
 
 function initPicker() {
+    // Every visit starts a completely new question with three empty choices.
+    wheelOptions = ["", "", ""];
+    const questionInput = document.getElementById('choice-question-input');
+    if (questionInput) questionInput.value = '';
     renderPickerOptions();
     renderPickerCards();
     const result = document.getElementById('wheel-result');
@@ -1062,10 +1071,13 @@ function renderPickerOptions() {
         item.className = 'picker-option-item';
         item.innerHTML = `
             <div class="picker-option-color-dot" style="background:${colors[index % colors.length]}"></div>
-            <input type="text" class="picker-option-input" value="${opt}" placeholder="输入选项...">
+            <input type="text" class="picker-option-input">
             <span class="picker-option-remove"><i class="fas fa-times"></i></span>
         `;
-        item.querySelector('input').addEventListener('input', (e) => {
+        const input = item.querySelector('input');
+        input.value = opt;
+        input.placeholder = getChoiceOptionPlaceholder(index);
+        input.addEventListener('input', (e) => {
             wheelOptions[index] = e.target.value;
             renderPickerCards();
         });
