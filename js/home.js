@@ -49,11 +49,34 @@
 
     /** 写入大容量设置（使用 localforage） */
     function homeSetLargeItem(key, value) {
+        const k = homeKey(key);
         if (typeof localforage !== 'undefined') {
-            return localforage.setItem(homeKey(key), value);
+            return localforage.setItem(k, value).then(() => {
+                localStorage.removeItem(k);
+            });
         }
-        localStorage.setItem(homeKey(key), value);
+        localStorage.setItem(k, value);
         return Promise.resolve();
+    }
+
+    /** 删除大容量设置（同时清理旧 localStorage 副本） */
+    async function homeRemoveLargeItem(key) {
+        const k = homeKey(key);
+        if (typeof localforage !== 'undefined') await localforage.removeItem(k);
+        localStorage.removeItem(k);
+    }
+
+    /** 将旧版本留在 localStorage 的大数据安全迁移到 IndexedDB */
+    async function migrateHomeLargeItem(key) {
+        if (typeof localforage === 'undefined') return;
+        const k = homeKey(key);
+        const oldValue = localStorage.getItem(k);
+        let storedValue = await localforage.getItem(k);
+        if (storedValue === null && oldValue !== null) {
+            await localforage.setItem(k, oldValue);
+            storedValue = oldValue;
+        }
+        if (storedValue !== null && oldValue !== null) localStorage.removeItem(k);
     }
 
     /** 删除 Home 设置（自动路由） */
@@ -465,14 +488,14 @@
         if (!file) return;
 
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = async function(e) {
             const url = e.target.result;
             const bgValue = `url(${url}) center/cover no-repeat`;
             const pageBg = document.getElementById('home-page-bg');
             if (pageBg) pageBg.style.background = bgValue;
 
             document.querySelectorAll('#page-bg-presets .bg-preset').forEach(el => el.classList.remove('active'));
-            homeSetItem('home_page_bg_custom', url);
+            await homeSetLargeItem('home_page_bg_custom', url);
             homeSetItem('home_page_bg', 'custom');
             
             // 同步到聊天界面
@@ -493,7 +516,7 @@
         }
         
         // 获取当前自定义背景URL
-        let savedCustomUrl = homeGetItem('home_page_bg_custom');
+        let savedCustomUrl = await homeGetLargeItem('home_page_bg_custom');
         if (!savedCustomUrl && currentBg.includes('url(')) {
             const match = currentBg.match(/url\(["']?([^"')]+)["']?\)/);
             if (match) savedCustomUrl = match[1];
@@ -587,10 +610,10 @@
             const preset = document.createElement('div');
             preset.className = 'bg-preset bg-preset-custom';
             preset.style.background = `url(${url}) center/cover no-repeat`;
-            preset.onclick = function() {
+            preset.onclick = async function() {
                 const pageBg = document.getElementById('home-page-bg');
                 if (pageBg) pageBg.style.background = `url(${url}) center/cover no-repeat`;
-                homeSetItem('home_page_bg_custom', url);
+                await homeSetLargeItem('home_page_bg_custom', url);
                 homeSetItem('home_page_bg', 'custom');
                 document.querySelectorAll('#page-bg-presets .bg-preset').forEach(el => el.classList.remove('active'));
                 preset.classList.add('active');
@@ -822,12 +845,12 @@
         if (!bgValue) {
             // 重置为默认背景
             pageBg.style.background = '';
-            homeRemoveItem('home_page_bg_custom');
+            homeRemoveLargeItem('home_page_bg_custom').catch(() => {});
             homeRemoveItem('home_page_bg');
         } else {
             pageBg.style.background = bgValue;
             // 保存为自定义背景
-            homeSetItem('home_page_bg_custom', bgValue);
+            homeSetLargeItem('home_page_bg_custom', bgValue).catch(() => {});
             homeSetItem('home_page_bg', 'custom');
         }
     };
@@ -843,7 +866,7 @@
         if (!file) return;
 
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = async function(e) {
             const url = e.target.result;
 
             const avatarEl = document.getElementById(`avatar-${currentAvatarTarget}`);
@@ -1120,7 +1143,7 @@
         if (!file || !currentIconTarget) return;
 
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = async function(e) {
             const url = e.target.result;
             customAppIcons[currentIconTarget] = url;
 
@@ -1130,13 +1153,13 @@
             }
 
             renderIconGrid();
-            homeSetItem('home_app_icons', JSON.stringify(customAppIcons));
+            await homeSetLargeItem('home_app_icons', JSON.stringify(customAppIcons));
             currentIconTarget = null;
         };
         reader.readAsDataURL(file);
     };
 
-    window.resetAppIcon = function(app) {
+    window.resetAppIcon = async function(app) {
         if (!app || !customAppIcons[app]) return;
         delete customAppIcons[app];
 
@@ -1146,7 +1169,7 @@
         }
 
         renderIconGrid();
-        homeSetItem('home_app_icons', JSON.stringify(customAppIcons));
+        await homeSetLargeItem('home_app_icons', JSON.stringify(customAppIcons));
     };
 
     window.resetAllAppIcons = function() {
@@ -1161,7 +1184,7 @@
         });
 
         renderIconGrid();
-        homeRemoveItem('home_app_icons');
+        homeRemoveLargeItem('home_app_icons').catch(() => {});
     };
 
     function renderIconGrid() {
@@ -1784,6 +1807,10 @@
 
     // ========== 加载保存的设置 ==========
     async function loadSavedSettings() {
+        // One-time migration: large Base64 backgrounds and app icons no longer
+        // occupy the small synchronous localStorage allowance.
+        await migrateHomeLargeItem('home_page_bg_custom').catch(() => {});
+        await migrateHomeLargeItem('home_app_icons').catch(() => {});
         // 头像绑定开关（全局）
         const savedAvatarSync = localStorage.getItem('home_avatar_sync');
         if (savedAvatarSync !== null) {
@@ -1823,7 +1850,7 @@
         // 页面背景
         const savedPageBg = homeGetItem('home_page_bg');
         if (savedPageBg === 'custom') {
-            const customUrl = homeGetItem('home_page_bg_custom');
+            const customUrl = await homeGetLargeItem('home_page_bg_custom');
             if (customUrl) {
                 const pageBg = document.getElementById('home-page-bg');
                 if (pageBg) pageBg.style.background = `url(${customUrl}) center/cover no-repeat`;
@@ -1954,7 +1981,7 @@
         }
 
         // 自定义功能图标
-        const savedIcons = homeGetItem('home_app_icons');
+        const savedIcons = await homeGetLargeItem('home_app_icons');
         if (savedIcons) {
             try {
                 customAppIcons = JSON.parse(savedIcons);

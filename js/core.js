@@ -635,39 +635,27 @@ window.openMyStickerSettings = function() {
 
 
 const _BACKUP_PREFIX = 'BACKUP_V1_';
+function _criticalBackupReplacer(key, value) {
+    if (typeof value === 'string') {
+        if (/^data:(image|audio|video)\//i.test(value)) return '[media stored in IndexedDB]';
+        if (value.length > 20000) return value.slice(0, 20000) + '…[trimmed]';
+    }
+    return value;
+}
 function _backupCriticalData() {
     if (window._skipBackup) return;
     try {
         const backupPayload = {
             ts: Date.now(),
-            messages: messages,
+            // This is only a small emergency fallback. The complete chat is
+            // already saved by saveData() in localforage / IndexedDB.
+            messages: messages.slice(-30),
             settings: settings,
-            sessionId: SESSION_ID
+            sessionId: SESSION_ID,
+            _truncated: messages.length > 30
         };
-
-        let payloadToStore = backupPayload;
-        const msgSizeEstimate = messages.length * 500; 
-        if (msgSizeEstimate > 3 * 1024 * 1024) {
-            payloadToStore = {
-                ...backupPayload,
-                messages: messages.slice(-200),
-                _truncated: true
-            };
-        }
-
-        const json = JSON.stringify(payloadToStore);
-
-        if (json.length > 4.5 * 1024 * 1024) {
-            const smallerPayload = {
-                ...payloadToStore,
-                messages: messages.slice(-50),
-                _truncated: true
-            };
-            const smallerJson = JSON.stringify(smallerPayload);
-            localStorage.setItem(_BACKUP_PREFIX + 'critical', smallerJson);
-        } else {
-            localStorage.setItem(_BACKUP_PREFIX + 'critical', json);
-        }
+        const json = JSON.stringify(backupPayload, _criticalBackupReplacer);
+        localStorage.setItem(_BACKUP_PREFIX + 'critical', json);
         localStorage.setItem(_BACKUP_PREFIX + 'timestamp', String(Date.now()));
     } catch (e) {
         console.warn('localStorage 备份写入失败（可能存储已满）:', e);
