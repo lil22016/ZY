@@ -699,6 +699,14 @@ html:not([data-theme="dark"])[data-color-theme="black-white"] .message-sent{
             });
         }
 
+        // 使用与普通对方消息完全相同的系统通知通道。
+        // _sendPartnerNotification 会自行检查通知开关、权限和 document.hidden，
+        // 因此只在 ZY 位于后台时产生 App 外通知。
+        if (typeof window._sendPartnerNotification === 'function') {
+            const partnerName = getName();
+            window._sendPartnerNotification(partnerName, `${partnerName} is calling…`);
+        }
+
         const autoRejectChance = 0.30;
         if (Math.random() < autoRejectChance) {
             const rejectDelay = 4000 + Math.random() * 6000;
