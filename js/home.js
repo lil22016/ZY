@@ -1366,6 +1366,7 @@
 
     // ========== 消息通知横幅 ==========
     let _notificationTimer = null;
+    let _notificationKind = '';
 
     /**
      * 显示消息通知横幅（类似锁屏通知）
@@ -1374,6 +1375,9 @@
      * @param {string} options.text - 消息内容
      * @param {string} [options.avatar] - 头像 URL
      * @param {string} [options.time] - 时间文本
+     * @param {number} [options.duration] - 显示时长（毫秒）
+     * @param {string} [options.appLabel] - 通知来源标签
+     * @param {string} [options.kind] - 通知类型，用于避免旧通知误关新通知
      */
     window.showHomeNotification = function(options) {
         const el = document.getElementById('home-notification');
@@ -1390,9 +1394,13 @@
         const nameEl = document.getElementById('notification-name');
         const textEl = document.getElementById('notification-text');
         const timeEl = document.getElementById('notification-time');
+        const appEl = el.querySelector('.home-notification-app');
+
+        _notificationKind = options.kind || 'message';
 
         if (nameEl) nameEl.textContent = options.sender || '对方';
         if (textEl) textEl.textContent = options.text || '';
+        if (appEl) appEl.textContent = options.appLabel || '传讯';
         if (timeEl) {
             if (options.time) {
                 timeEl.textContent = options.time;
@@ -1423,19 +1431,21 @@
         const chatBadge = document.getElementById('chat-badge');
         if (chatBadge) chatBadge.style.display = 'block';
 
-        // 5秒后自动消失
+        // 普通消息默认 5 秒；来电等特殊通知可以单独延长
+        const duration = Math.max(1000, Number(options.duration) || 5000);
         _notificationTimer = setTimeout(() => {
             window.dismissHomeNotification(false);
-        }, 5000);
+        }, duration);
     };
 
     /**
      * 关闭通知横幅
      * @param {boolean} clicked - 是否被点击（点击则进入聊天界面）
      */
-    window.dismissHomeNotification = function(clicked) {
+    window.dismissHomeNotification = function(clicked, expectedKind) {
         const el = document.getElementById('home-notification');
         if (!el) return;
+        if (expectedKind && _notificationKind !== expectedKind) return;
 
         if (_notificationTimer) {
             clearTimeout(_notificationTimer);
@@ -1444,6 +1454,7 @@
 
         el.classList.remove('show');
         el.classList.add('hide');
+        _notificationKind = '';
 
         // 隐藏聊天图标小红点（如果点击了通知或进入聊天）
         if (clicked) {
