@@ -508,6 +508,12 @@ html:not([data-theme="dark"])[data-color-theme="black-white"] .message-sent{
     };
     const getName = () => window.settings?.partnerName || document.getElementById('partner-name')?.textContent.trim() || '对方';
 
+    function dismissIncomingNotification() {
+        if (typeof window.dismissHomeNotification === 'function') {
+            window.dismissHomeNotification(false, 'incoming-call');
+        }
+    }
+
     function fillAv(avId) {
         const av = document.getElementById(avId), src = getAvSrc();
         if (av) av.innerHTML = src
@@ -681,12 +687,25 @@ html:not([data-theme="dark"])[data-color-theme="black-white"] .message-sent{
         ov.classList.add('visible');
         clearTimeout(S.incomingTimer);
 
+        if (typeof window.showHomeNotification === 'function') {
+            const partnerName = getName();
+            window.showHomeNotification({
+                sender: partnerName,
+                text: `${partnerName} is calling…`,
+                avatar: getAvSrc() || '',
+                appLabel: '视频通话',
+                kind: 'incoming-call',
+                duration: 20000,
+            });
+        }
+
         const autoRejectChance = 0.30;
         if (Math.random() < autoRejectChance) {
             const rejectDelay = 4000 + Math.random() * 6000;
             S.incomingTimer = setTimeout(() => {
                 if (!ov.classList.contains('visible')) return;
                 ov.classList.remove('visible');
+                dismissIncomingNotification();
                 const myName = (typeof settings !== 'undefined' && settings.myName) || '我';
                 const partnerName = getName();
                 const rejectLabels = [
@@ -702,6 +721,7 @@ html:not([data-theme="dark"])[data-color-theme="black-white"] .message-sent{
             S.incomingTimer = setTimeout(() => {
                 if (!ov.classList.contains('visible')) return;
                 ov.classList.remove('visible');
+                dismissIncomingNotification();
                 const myName = (typeof settings !== 'undefined' && settings.myName) || '我';
                 sendCallEvent('fa-phone-slash', `${myName}未接听 ${getName()} 的来电`, null);
             }, 22000);
@@ -844,12 +864,13 @@ html:not([data-theme="dark"])[data-color-theme="black-white"] .message-sent{
         document.getElementById('call-inc-reject')?.addEventListener('click', () => {
             document.getElementById('call-incoming-overlay')?.classList.remove('visible');
             clearTimeout(S.incomingTimer);
+            dismissIncomingNotification();
             const myName = (typeof settings !== 'undefined' && settings.myName) || '我';
             sendCallEvent('fa-phone-slash', `${myName}拒绝了 ${getName()} 的通话`, null);
         });
         document.getElementById('call-inc-accept')?.addEventListener('click', () => {
             document.getElementById('call-incoming-overlay')?.classList.remove('visible');
-            clearTimeout(S.incomingTimer); startCall(true);
+            clearTimeout(S.incomingTimer); dismissIncomingNotification(); startCall(true);
         });
 
         document.getElementById('call-hangup-btn')?.addEventListener('click', endCall);
